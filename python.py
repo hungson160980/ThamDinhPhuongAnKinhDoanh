@@ -326,6 +326,11 @@ def extract_data_from_docx_text(text):
     if asset:
         data["asset_value"] = parse_int_from_text(asset.group(1))
 
+    # ---- Địa chỉ tài sản ----
+    asset_addr = re.search(r"(?:Địa chỉ tài sản|Tài sản tại)[:\s]*([^\n]+)", joined)
+    if asset_addr:
+        data["asset_address"] = asset_addr.group(1).strip()
+
     # ---- Thu nhập hàng tháng ----
     inc = re.search(r"Tổng thu nhập ổn định.*?([\d\.\,]+)", joined)
     if inc:
@@ -455,25 +460,121 @@ def df_to_excel_bytes(df):
 # Xuất PDF bằng reportlab
 # ==========================
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 def create_pdf_report(state, indicators, chart_image_bytes=None):
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     doc = SimpleDocTemplate(tmp.name, pagesize=A4)
+
+    # Register Vietnamese font - sử dụng DejaVu Sans có sẵn trong hầu hết hệ thống
+    try:
+        pdfmetrics.registerFont(TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        font_name = 'DejaVuSans'
+        font_bold = 'DejaVuSans-Bold'
+    except:
+        # Fallback: Sử dụng Helvetica (có hỗ trợ Latin-1 extended)
+        font_name = 'Helvetica'
+        font_bold = 'Helvetica-Bold'
+
+    # Create custom styles với font tiếng Việt
     styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Title'],
+        fontName=font_bold,
+        fontSize=16,
+        textColor=colors.HexColor('#1e3c72'),
+        alignment=TA_CENTER,
+        spaceAfter=20
+    )
+
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontName=font_bold,
+        fontSize=14,
+        textColor=colors.HexColor('#2a5298'),
+        spaceAfter=12
+    )
+
+    normal_style = ParagraphStyle(
+        'CustomNormal',
+        parent=styles['Normal'],
+        fontName=font_name,
+        fontSize=11,
+        spaceAfter=6
+    )
+
     elems = []
 
-    elems.append(Paragraph("BÁO CÁO THẨM ĐỊNH PHƯƠNG ÁN SỬ DỤNG VỐN", styles["Title"]))
+    # Title
+    elems.append(Paragraph("BÁO CÁO THẨM ĐỊNH PHƯƠNG ÁN SỬ DỤNG VỐN", title_style))
     elems.append(Spacer(1, 12))
 
-    elems.append(Paragraph(f"Khách hàng: {state.get('name1','')}", styles["Normal"]))
-    elems.append(Paragraph(f"Địa chỉ: {state.get('address','')}", styles["Normal"]))
-    elems.append(Paragraph(f"Số điện thoại: {state.get('phone','')}", styles["Normal"]))
-    elems.append(Spacer(1, 12))
+    # Thông tin khách hàng
+    elems.append(Paragraph("THÔNG TIN KHÁCH HÀNG", heading_style))
+    customer_data = [
+        ["Họ và tên:", state.get('name1', 'N/A')],
+        ["Địa chỉ:", state.get('address', 'N/A')],
+        ["Số điện thoại:", state.get('phone', 'N/A')],
+        ["Email:", state.get('email', 'N/A')]
+    ]
 
-    elems.append(Paragraph("CÁC CHỈ TIÊU TÀI CHÍNH", styles["Heading2"]))
+    customer_table = Table(customer_data, colWidths=[150, 350])
+    customer_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), font_name),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#1e3c72')),
+        ('FONTNAME', (0, 0), (0, -1), font_bold),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elems.append(customer_table)
+    elems.append(Spacer(1, 20))
+
+    # Thông tin tài chính
+    elems.append(Paragraph("THÔNG TIN TÀI CHÍNH", heading_style))
+    financial_data = [
+        ["Tổng nhu cầu vốn:", format_thousands(state.get('total_need', 0)) + " VND"],
+        ["Vốn đối ứng:", format_thousands(state.get('own_capital', 0)) + " VND"],
+        ["Số tiền vay:", format_thousands(state.get('loan_amount', 0)) + " VND"],
+        ["Lãi suất:", f"{state.get('interest_rate', 0)}% /năm"],
+        ["Thời hạn vay:", f"{state.get('term_months', 0)} tháng"],
+    ]
+
+    financial_table = Table(financial_data, colWidths=[150, 350])
+    financial_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), font_name),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#1e3c72')),
+        ('FONTNAME', (0, 0), (0, -1), font_bold),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    elems.append(financial_table)
+    elems.append(Spacer(1, 20))
+
+    # Các chỉ tiêu tài chính
+    elems.append(Paragraph("CÁC CHỈ TIÊU ĐÁNH GIÁ", heading_style))
+
+    indicator_data = []
+    indicator_labels = {
+        "monthly_payment": "Thanh toán hàng tháng",
+        "total_payment": "Tổng thanh toán",
+        "dsr": "Chỉ số DSR",
+        "ltv": "Chỉ số LTV",
+        "net_cashflow": "Dòng tiền ròng"
+    }
+
     for k, v in indicators.items():
+        label = indicator_labels.get(k, k)
         if v is None:
             disp = "N/A"
         elif k == "dsr":
@@ -481,16 +582,30 @@ def create_pdf_report(state, indicators, chart_image_bytes=None):
         elif k == "ltv":
             disp = f"{v:.2f}%"
         else:
-            disp = format_thousands(v)
-        elems.append(Paragraph(f"{k}: {disp}", styles["Normal"]))
+            disp = format_thousands(v) + " VND"
+        indicator_data.append([label + ":", disp])
 
-    elems.append(Spacer(1, 12))
+    indicator_table = Table(indicator_data, colWidths=[150, 350])
+    indicator_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), font_name),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#1e3c72')),
+        ('FONTNAME', (0, 0), (0, -1), font_bold),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f7fafc')),
+    ]))
+    elems.append(indicator_table)
+    elems.append(Spacer(1, 20))
 
+    # Biểu đồ
     if chart_image_bytes:
+        elems.append(Paragraph("BIỂU ĐỒ PHÂN TÍCH", heading_style))
         f = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
         f.write(chart_image_bytes)
         f.flush()
-        elems.append(RLImage(f.name, width=400, height=250))
+        elems.append(RLImage(f.name, width=450, height=280))
 
     doc.build(elems)
 
@@ -574,8 +689,12 @@ if "state" not in st.session_state:
         "interest_rate": 8.5,
         "term_months": 60,
         "asset_value": 0,
+        "asset_address": "",
+        "asset_type": "Nhà & đất",
+        "asset_docs": "GCN QSDĐ",
         "monthly_income": 0,
-        "monthly_expense": 0
+        "monthly_expense": 0,
+        "purpose": "Mua nhà"
     }
 
 if "chat_history" not in st.session_state:
@@ -628,8 +747,12 @@ with left_col:
             "interest_rate": 8.5,
             "term_months": 60,
             "asset_value": 0,
+            "asset_address": "",
+            "asset_type": "Nhà & đất",
+            "asset_docs": "GCN QSDĐ",
             "monthly_income": 0,
-            "monthly_expense": 0
+            "monthly_expense": 0,
+            "purpose": "Mua nhà"
         }
         st.rerun()
     
@@ -658,12 +781,15 @@ with right_col:
     def numeric_editor(label, key, step=1000000):
         c1, c2, c3 = st.columns([3, 1, 1])
         with c1:
-            txt = st.text_input(label, value=str(state.get(key, 0)))
-            try:
-                val = int(txt.replace(".", "").replace(",", ""))
-                state[key] = val
-            except:
-                pass
+            current_val = state.get(key, 0)
+            state[key] = st.number_input(
+                label,
+                value=int(current_val) if current_val else 0,
+                min_value=0,
+                step=step,
+                key=f"num_{key}",
+                format="%d"
+            )
         with c2:
             if st.button("➕", key=f"plus_{key}", use_container_width=True):
                 state[key] = state.get(key, 0) + step
