@@ -779,4 +779,4 @@ with tabs[8]:
     st.write("Chat history len:", len(st.session_state.get("chat_history", [])))
 
 st.markdown("---")
-st.caption("Nếu cần Muội tách repo, push GitHub và cấu hình Streamlit Cloud CI/CD, Muội làm tiếp ngay.")
+st.caption(".")
