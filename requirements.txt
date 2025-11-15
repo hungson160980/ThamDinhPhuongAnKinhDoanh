@@ -7,3 +7,10 @@ google-generativeai>=0.7.0
 plotly
 fpdf2
 python-docx
+streamlit
+pandas
+python-docx
+matplotlib
+openpyxl
+reportlab
+requests
