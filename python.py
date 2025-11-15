@@ -1,425 +1,368 @@
-####################### main.py — PHIÊN BẢN UI HIỆN ĐẠI ############################
-# PASDV – PHÂN TÍCH PHƯƠNG ÁN SỬ DỤNG VỐN
-# Modern UI Version with Enhanced Design
-# Muội viết theo yêu cầu của Huynh ❤️
+# main.py
+"""
+PASDV Analyzer - Full rewritten Streamlit app
+Features:
+- Upload .docx (PASDV) and heuristic extraction
+- Editable fields with +/- buttons and thousands separator "."
+- Tabs: Identification, Finance, Collateral, Calculations, Charts, AI Analysis, Chat, Export
+- Two AI analyses (from uploaded file, from adjusted inputs) using gemini-2.5-flash
+- Chatbox with Gemini, clear chat
+- Amortization schedule generation, Excel export
+- DOCX/PDF export of report (DOCX via python-docx, PDF via reportlab)
+- Safe imports and helpful error messages
+Author: Generated for Huynh
+"""
+from __future__ import annotations
+import io
+import re
+import math
+import json
+import datetime
+from typing import Dict, Any, Optional, Tuple
+import tempfile
 
-import streamlit as st
 import pandas as pd
-import io, re, requests, datetime, base64, tempfile
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import plotly.express as px
+import numpy as np
+import streamlit as st
 
-# ---- Import DOCX an toàn ----
+# safe imports
 try:
     from docx import Document
-except ImportError:
-    import docx
-    Document = docx.Document
+except Exception:
+    Document = None
 
-# ==========================
-# CUSTOM CSS - UI HIỆN ĐẠI
-# ==========================
-def load_custom_css():
-    st.markdown("""
-    <style>
-    /* Import Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* Global Styles */
-    * {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Main Container */
-    .main {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 0;
-    }
-    
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
-        color: white;
-    }
-    
-    [data-testid="stSidebar"] .stTextInput input,
-    [data-testid="stSidebar"] .stSelectbox select {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: white;
-        border-radius: 10px;
-        padding: 10px;
-    }
-    
-    [data-testid="stSidebar"] h1,
-    [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] label {
-        color: white !important;
-    }
-    
-    /* Card Style */
-    .card {
-        background: white;
-        border-radius: 20px;
-        padding: 30px;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
-    }
-    
-    /* Metric Cards */
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 15px;
-        padding: 20px;
-        color: white;
-        text-align: center;
-        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        margin: 10px 0;
-    }
-    
-    .metric-value {
-        font-size: 2.5em;
-        font-weight: 700;
-        margin: 10px 0;
-    }
-    
-    .metric-label {
-        font-size: 0.9em;
-        opacity: 0.9;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    /* Buttons */
-    .stButton>button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 12px 30px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-    }
-    
-    /* Input Fields */
-    .stTextInput>div>div>input,
-    .stNumberInput>div>div>input,
-    .stSelectbox>div>div>select {
-        border: 2px solid #e0e0e0;
-        border-radius: 10px;
-        padding: 12px;
-        transition: border-color 0.3s ease;
-    }
-    
-    .stTextInput>div>div>input:focus,
-    .stNumberInput>div>div>input:focus {
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-    
-    /* Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        background: white;
-        border-radius: 15px;
-        padding: 10px;
-        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 10px;
-        padding: 12px 24px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
-    
-    .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-    }
-    
-    /* File Uploader */
-    [data-testid="stFileUploader"] {
-        background: white;
-        border: 2px dashed #667eea;
-        border-radius: 15px;
-        padding: 30px;
-        text-align: center;
-    }
-    
-    /* Headers */
-    h1, h2, h3 {
-        color: #2d3748;
-        font-weight: 700;
-    }
-    
-    /* Success/Warning/Error Messages */
-    .stSuccess, .stWarning, .stError, .stInfo {
-        border-radius: 10px;
-        padding: 15px;
-    }
-    
-    /* DataFrame Styling */
-    .dataframe {
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    
-    /* Title Animation */
-    @keyframes fadeInDown {
-        from {
-            opacity: 0;
-            transform: translateY(-20px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .main-title {
-        animation: fadeInDown 0.8s ease;
-    }
-    
-    /* Progress Bar */
-    .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-    }
-    
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 10px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #5568d3;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+try:
+    import matplotlib.pyplot as plt
+except Exception:
+    plt = None
+
+try:
+    import requests
+except Exception:
+    requests = None
+
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet
+except Exception:
+    # PDF export will be disabled if not installed
+    SimpleDocTemplate = None
+
+try:
+    from docx import Document as DocxWriter
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+except Exception:
+    DocxWriter = None
 
 # ---------------------------
-# Format số đẹp (1.000.000)
+# CONFIG
 # ---------------------------
-def format_thousands(x, decimals=0):
-    if x is None:
+GEMINI_API_URL = "https://api.example.com/gemini"  # replace with real endpoint if available
+GEMINI_MODEL = "gemini-2.5-flash"
+
+# ---------------------------
+# UTILITIES: formatting & parsing
+# ---------------------------
+def format_thousands_dot(x: Optional[float]) -> str:
+    """Format integer-like numbers with '.' as thousand separator, no decimals."""
+    if x is None or (isinstance(x, float) and math.isnan(x)):
         return ""
     try:
-        if decimals == 0:
-            s = f"{x:,.0f}"
-            return s.replace(",", ".")
-        else:
-            s = ("{:,." + str(decimals) + "f}").format(x)
-            return s.replace(",", ".")
-    except:
+        # round to 0 decimals for display of monetary amounts
+        val = float(x)
+        s = f"{val:,.0f}"
+        return s.replace(",", ".")
+    except Exception:
         return str(x)
 
-# ---------------------------
-# Parse số từ văn bản
-# ---------------------------
-def parse_int_from_text(s):
-    if not s:
-        return None
-    nums = re.findall(r"[\d\.,]+", s)
-    cleaned = []
-    for n in nums:
-        n2 = n.replace(".", "").replace(",", "")
-        if n2.isdigit():
-            cleaned.append(int(n2))
-    if cleaned:
-        return max(cleaned)
-    return None
+def format_number_readable(x: Optional[float], decimals: int = 2) -> str:
+    if x is None or (isinstance(x, float) and math.isnan(x)):
+        return ""
+    try:
+        val = float(x)
+        if decimals == 0:
+            return format_thousands_dot(val)
+        s = f"{val:,.{decimals}f}"
+        # python uses comma as thousands sep; replace appropriately
+        s = s.replace(",", "_").replace(".", ",").replace("_", ".")
+        return s
+    except Exception:
+        return str(x)
+
+def vnd_to_float(s: Optional[str]) -> float:
+    """Parse VND text like '5.000.000.000 đồng' or '5,000,000,000' or '5000000' -> float"""
+    if s is None:
+        return 0.0
+    s = str(s).strip()
+    # remove words
+    s = s.replace("đồng", "").replace("VND", "").replace("vnđ", "").replace("₫", "")
+    s = s.replace(" ", "")
+    # If both '.' and ',' present, assume '.' is thousands and ',' is decimal OR vice versa.
+    # Heuristic: if there are '.' and groups of 3 between them -> remove dots.
+    if "." in s and "," in s:
+        # common Vietnamese format: 1.234.567,89
+        s = s.replace(".", "").replace(",", ".")
+    else:
+        # remove thousands separator dots or commas, keep dot as decimal if it's the only one and there are decimals
+        if s.count(".") > 1:
+            s = s.replace(".", "")
+        if s.count(",") > 1:
+            s = s.replace(",", "")
+        s = s.replace(",", ".")
+        s = s.replace(".", "") if s.isdigit() else s
+    # final sanitize
+    s = re.sub(r"[^\d\.\-]", "", s)
+    try:
+        return float(s) if s not in ("", ".", "-") else 0.0
+    except Exception:
+        return 0.0
+
+def percent_to_float(s: Optional[str]) -> float:
+    if s is None:
+        return 0.0
+    s = str(s).strip().replace(",", ".")
+    m = re.search(r"(\d+(\.\d+)?)", s)
+    return float(m.group(1)) if m else 0.0
 
 # ---------------------------
-# Đọc toàn bộ văn bản trong file DOCX
+# DOCX extraction heuristics
 # ---------------------------
-def extract_text_from_docx(file_stream):
-    doc = Document(file_stream)
-    texts = []
-    for p in doc.paragraphs:
-        if p.text and p.text.strip():
-            texts.append(p.text.strip())
-    return "\n".join(texts)
+def extract_text_docx_bytes(file_bytes: bytes) -> str:
+    if Document is None:
+        return ""
+    bio = io.BytesIO(file_bytes)
+    doc = Document(bio)
+    paragraphs = [p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()]
+    return "\n".join(paragraphs)
 
-# ---------------------------
-# Trích xuất dữ liệu từ nội dung docx
-# ---------------------------
-def extract_data_from_docx_text(text):
-    data = {}
-    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
-    joined = "\n".join(lines)
-
-    # ---- Họ tên ----
-    name_matches = re.findall(r"Họ và tên[:\s]*([A-Za-zÀ-ỹ\s]+)", joined)
-    if name_matches:
-        data["name1"] = name_matches[0].strip()
-
-    # ---- Số điện thoại ----
-    phone = re.findall(r"\b0\d{8,10}\b", joined)
-    if phone:
-        data["phone"] = phone[0]
-
-    # ---- Email ----
-    email = re.findall(r"[\w\.-]+@[\w\.-]+", joined)
-    if email:
-        data["email"] = email[0]
-
-    # ---- Địa chỉ ----
-    addr = re.findall(r"Nơi cư trú[:\s]*([^\n]+)", joined)
-    if addr:
-        data["address"] = addr[0].strip()
-
-    # ---- Tổng nhu cầu vốn ----
-    total = re.search(r"Tổng nhu cầu vốn[:\s]*([\d\.\,\s]+)", joined)
-    if total:
-        data["total_need"] = parse_int_from_text(total.group(1))
-
-    # ---- Vốn đối ứng ----
-    vdd = re.search(r"Vốn đối ứng[:\s]*([\d\.\,\s]+)", joined)
-    if vdd:
-        data["own_capital"] = parse_int_from_text(vdd.group(1))
-
-    # ---- Số tiền vay ----
-    loan = re.search(r"Vốn vay Agribank.*?([\d\.\,\s]+)", joined)
-    if loan:
-        data["loan_amount"] = parse_int_from_text(loan.group(1))
-
-    # ---- Lãi suất ----
-    ir = re.search(r"Lãi suất[:\s]*([\d\.,]+)", joined)
-    if ir:
-        try:
-            data["interest_rate"] = float(ir.group(1).replace(",", "."))
-        except:
-            pass
-
-    # ---- Thời hạn ----
-    term = re.search(r"Thời hạn vay[:\s]*(\d+)\s*tháng", joined)
-    if term:
-        data["term_months"] = int(term.group(1))
-
-    # ---- Giá trị tài sản ----
-    asset = re.search(r"Giá trị[:\s]*([\d\.,]+)", joined)
-    if asset:
-        data["asset_value"] = parse_int_from_text(asset.group(1))
-
-    # ---- Thu nhập hàng tháng ----
-    inc = re.search(r"Tổng thu nhập ổn định.*?([\d\.\,]+)", joined)
-    if inc:
-        data["monthly_income"] = parse_int_from_text(inc.group(1))
-
-    # ---- Chi phí ----
-    exp = re.search(r"Tổng chi phí hàng tháng[:\s]*([\d\.\,]+)", joined)
-    if exp:
-        data["monthly_expense"] = parse_int_from_text(exp.group(1))
-
-    return data
-
-# ---------------------------
-# Tính toán tài chính: PMT
-# ---------------------------
-def annuity_monthly_payment(loan_amount, annual_rate_percent, term_months):
-    if not loan_amount or not term_months or term_months <= 0:
-        return 0
-    r = (annual_rate_percent or 0) / 100 / 12
-    if r == 0:
-        return loan_amount / term_months
-    denom = 1 - (1 + r) ** (-term_months)
-    if denom == 0:
-        return loan_amount / term_months
-    return loan_amount * r / denom
-
-# ---------------------------
-# Tính các chỉ tiêu
-# ---------------------------
-def compute_indicators(state):
-    loan = state.get("loan_amount", 0) or 0
-    rate = state.get("interest_rate", 0) or 0
-    term = state.get("term_months", 0) or 0
-    income = state.get("monthly_income", 0) or 0
-    expense = state.get("monthly_expense", 0) or 0
-    asset_val = state.get("asset_value", 0) or 0
-
-    monthly = annuity_monthly_payment(loan, rate, term)
-    total_pay = monthly * (term or 1)
-    dsr = monthly / income if income else None
-    ltv = loan / asset_val * 100 if asset_val else None
-    net_cf = income - expense - monthly
-
-    return {
-        "monthly_payment": monthly,
-        "total_payment": total_pay,
-        "dsr": dsr,
-        "ltv": ltv,
-        "net_cashflow": net_cf
+def extract_fields_from_text(text: str) -> Dict[str, Any]:
+    """
+    Heuristic extraction tuned to the PASDV.docx sample.
+    Returns dict with keys used by app.
+    """
+    out: Dict[str, Any] = {
+        "name": "",
+        "cccd": "",
+        "address": "",
+        "phone": "",
+        "email": "",
+        "purpose": "",
+        "total_need": 0.0,
+        "own_capital": 0.0,
+        "loan_amount": 0.0,
+        "interest_rate": 0.0,
+        "term_months": 0,
+        "project_income_month": 0.0,
+        "salary_income_month": 0.0,
+        "total_income_month": 0.0,
+        "monthly_expense": 0.0,
+        "collateral_value": 0.0,
     }
+    if not text:
+        return out
+    # Normalize spaces
+    t = text.replace("\r", "\n")
+    # name: look for 'Họ và tên: ...' or numbered list '1. Họ và tên: ...'
+    m = re.search(r"Họ\s+và\s+tên\s*[:\-–]?\s*([A-Za-zÀ-ỹ\s]+(?:[A-Za-zÀ-ỹ\s]+)?)", t, flags=re.IGNORECASE)
+    if m:
+        out["name"] = m.group(1).strip()
+    # cccd: look for 9-12 digits after CMND/CCCD
+    m = re.search(r"(?:CMND|CCCD|CMND\/CCCD).*?[:\-–]?\s*([0-9]{9,12})", t, flags=re.IGNORECASE)
+    if m:
+        out["cccd"] = m.group(1).strip()
+    # phone
+    m = re.search(r"Số\s*điện\s*thoại\s*[:\-–]?\s*(0\d{8,10})", t, flags=re.IGNORECASE)
+    if m:
+        out["phone"] = m.group(1).strip()
+    else:
+        m = re.search(r"\b(0\d{8,10})\b", t)
+        if m:
+            out["phone"] = m.group(1)
+    # email
+    m = re.search(r"[\w\.-]+@[\w\.-]+\.\w+", t)
+    if m:
+        out["email"] = m.group(0)
+    # address
+    m = re.search(r"Nơi\s*cư\s*trú\s*[:\-–]?\s*([^\n]+)", t, flags=re.IGNORECASE)
+    if m:
+        out["address"] = m.group(1).strip()
+    # purpose
+    m = re.search(r"Mục\s*đích\s*vay\s*[:\-–]?\s*([^\n]+)", t, flags=re.IGNORECASE)
+    if m:
+        out["purpose"] = m.group(1).strip()
+    # total need
+    m = re.search(r"Tổng\s*nhu\s*cầu\s*vốn\s*[:\-–]?\s*([\d\.,\s]+)\s*đồng?", t, flags=re.IGNORECASE)
+    if m:
+        out["total_need"] = vnd_to_float(m.group(1))
+    # own capital
+    m = re.search(r"Vốn\s*đối\s*ứng.*?([\d\.,\s]+)\s*đồng?", t, flags=re.IGNORECASE)
+    if m:
+        out["own_capital"] = vnd_to_float(m.group(1))
+    # loan amount (vốn vay Agribank số tiền)
+    m = re.search(r"Vốn\s*vay.*?[\:–\-]?\s*([\d\.,\s]+)\s*đồng", t, flags=re.IGNORECASE)
+    if m:
+        out["loan_amount"] = vnd_to_float(m.group(1))
+    # interest
+    m = re.search(r"Lãi\s*suất\s*[:\-–]?\s*([\d\.,]+)\s*%/?năm?", t, flags=re.IGNORECASE)
+    if m:
+        out["interest_rate"] = percent_to_float(m.group(1))
+    else:
+        # fallback: find pattern like '8,5%/năm' anywhere
+        m = re.search(r"(\d+[.,]?\d*)\s*%/năm", t)
+        if m:
+            out["interest_rate"] = percent_to_float(m.group(1))
+    # term months: look for '60 tháng' or '(5 năm)'
+    m = re.search(r"Thời\s*hạn\s*vay\s*[:\-–]?\s*(\d+)\s*tháng", t, flags=re.IGNORECASE)
+    if m:
+        out["term_months"] = int(m.group(1))
+    else:
+        m = re.search(r"Thời\s*hạn\s*vay.*?(\d+)\s*năm", t, flags=re.IGNORECASE)
+        if m:
+            out["term_months"] = int(m.group(1)) * 12
+    # project income from text: "30.000.000 đồng/tháng"
+    m = re.search(r"([\d\.,\s]+)\s*đồng\s*/\s*tháng", t)
+    if m:
+        # choose the first reasonable monthly amount as project income maybe
+        val = vnd_to_float(m.group(1))
+        # if less than 1e7 maybe it's monthly expense, so be cautious; we will later try to detect total income
+        out["project_income_month"] = val
+    # salary income detection lines like 'Thu nhập từ lương: 70.000.000 đồng/tháng'
+    m = re.search(r"Thu\s*nhập\s*(?:từ\s*lương)?\s*[:\-–]?\s*([\d\.,\s]+)\s*đồng\s*/\s*tháng", t, flags=re.IGNORECASE)
+    if m:
+        out["salary_income_month"] = vnd_to_float(m.group(1))
+    # total income
+    m = re.search(r"Tổng\s*thu\s*nhập.*?([\d\.,\s]+)\s*đồng", t, flags=re.IGNORECASE)
+    if m:
+        out["total_income_month"] = vnd_to_float(m.group(1))
+    else:
+        # fallback: sum salary + project
+        out["total_income_month"] = out.get("salary_income_month", 0.0) + out.get("project_income_month", 0.0)
+    # monthly expense
+    m = re.search(r"Tổng\s*chi\s*phí\s*hàng\s*tháng\s*[:\-–]?\s*([\d\.,\s]+)\s*(?:đồng)?", t, flags=re.IGNORECASE)
+    if m:
+        out["monthly_expense"] = vnd_to_float(m.group(1))
+    # collateral value: 'Giá trị: 6.000.000.000 đồng' or 'Giá trị nhà dự kiến mua: 6.000.000.000 đồng'
+    m = re.search(r"Giá\s*trị(?:\s*nhà.*|)\s*(?:dự\s*kiến\s*mua\s*:|:)?\s*([\d\.,\s]+)\s*đồng", t, flags=re.IGNORECASE)
+    if m:
+        out["collateral_value"] = vnd_to_float(m.group(1))
+    # If collateral not found, look for 'Giá trị: 6.000.000.000 đồng' near 'Tài sản' words
+    if out["collateral_value"] == 0:
+        m = re.search(r"Tài\s*sản[^\n]{0,80}Giá\s*trị\s*[:\-–]?\s*([\d\.,\s]+)\s*đồng", t, flags=re.IGNORECASE)
+        if m:
+            out["collateral_value"] = vnd_to_float(m.group(1))
+    # final adjustments: ensure numeric fields non-negative
+    for k in ["total_need", "own_capital", "loan_amount", "interest_rate", "term_months",
+              "project_income_month", "salary_income_month", "total_income_month", "monthly_expense",
+              "collateral_value"]:
+        if k in out and out[k] is None:
+            out[k] = 0.0
+    return out
 
-# ==========================
-# Lịch trả nợ (Amortization)
-# ==========================
-def generate_amortization_schedule(loan_amount, annual_rate_percent, term_months, start_date=None):
-    if loan_amount is None or term_months is None:
-        return pd.DataFrame()
-    r = (annual_rate_percent or 0) / 100 / 12
-    pmt = annuity_monthly_payment(loan_amount, annual_rate_percent, term_months)
-    balance = loan_amount
-    rows = []
+# ---------------------------
+# FINANCIAL calculations
+# ---------------------------
+def annuity_monthly_payment(principal: float, annual_rate_pct: float, months: int) -> float:
+    """Compute annuity (fixed payment) monthly."""
+    try:
+        principal = float(principal)
+        r = float(annual_rate_pct) / 100.0 / 12.0
+        n = int(months)
+        if n <= 0:
+            return 0.0
+        if r == 0:
+            return principal / n
+        # standard annuity formula:
+        payment = principal * r / (1 - (1 + r) ** (-n))
+        return float(payment)
+    except Exception:
+        return 0.0
 
+def amortization_schedule(principal: float, annual_rate_pct: float, months: int, start_date: Optional[datetime.date] = None) -> pd.DataFrame:
+    if months <= 0 or principal <= 0:
+        return pd.DataFrame(columns=["Month", "Date", "Payment", "Principal", "Interest", "Remaining"])
     if start_date is None:
         start_date = datetime.date.today()
-
-    for i in range(1, term_months + 1):
+    r = float(annual_rate_pct) / 100.0 / 12.0
+    payment = annuity_monthly_payment(principal, annual_rate_pct, months)
+    schedule = []
+    balance = float(principal)
+    for i in range(1, months + 1):
         interest = balance * r
-        principal = pmt - interest
-        if principal > balance:
-            principal = balance
-            pmt = principal + interest
-        balance -= principal
-        rows.append({
+        principal_paid = payment - interest
+        if principal_paid > balance:
+            principal_paid = balance
+            payment = principal_paid + interest
+        balance = max(0.0, balance - principal_paid)
+        pay_date = start_date + pd.DateOffset(months=i)
+        schedule.append({
             "Month": i,
-            "Date": (start_date + pd.DateOffset(months=i)).strftime("%Y-%m-%d"),
-            "Payment": pmt,
-            "Principal": principal,
-            "Interest": interest,
-            "Remaining": max(balance, 0)
+            "Date": pay_date.strftime("%Y-%m-%d"),
+            "Payment": round(payment, 0),
+            "Principal": round(principal_paid, 0),
+            "Interest": round(interest, 0),
+            "Remaining": round(balance, 0)
         })
+    return pd.DataFrame(schedule)
 
-    return pd.DataFrame(rows)
+def compute_indicators_from_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
+    loan = float(inputs.get("loan_amount", 0.0))
+    rate = float(inputs.get("interest_rate", 0.0))
+    term = int(inputs.get("term_months", 0))
+    income = float(inputs.get("total_income_month", 0.0))
+    expense = float(inputs.get("monthly_expense", 0.0))
+    collateral = float(inputs.get("collateral_value", 0.0))
+    pmt = annuity_monthly_payment(loan, rate, term)
+    total_pay = pmt * (term or 1)
+    dsr = pmt / income if income > 0 else float("nan")
+    ltv = loan / collateral if collateral > 0 else float("nan")
+    net_cashflow = income - expense - pmt
+    # other CADAP-ish metrics:
+    e_over_c = inputs.get("own_capital", 0.0) / (inputs.get("total_need", 1.0)) if inputs.get("total_need", 0.0) > 0 else float("nan")
+    debt_over_income = (inputs.get("loan_amount", 0.0) + inputs.get("tong_no_hien_tai", 0.0)) / max(1e-9, income * 12.0)
+    cfr = (income - pmt) / income if income > 0 else float("nan")
+    coverage = collateral / max(1e-9, loan) if loan > 0 else float("nan")
+    # aggregate score (simple demo)
+    score = 0.0
+    try:
+        if not math.isnan(dsr):
+            score += max(0.0, 1.0 - min(1.0, dsr)) * 0.25
+        if not math.isnan(ltv):
+            score += max(0.0, 1.0 - min(1.0, ltv)) * 0.25
+        if not math.isnan(e_over_c):
+            score += min(1.0, e_over_c / 0.3) * 0.2
+        if not math.isnan(cfr):
+            score += max(0.0, min(1.0, cfr)) * 0.2
+        if not math.isnan(coverage):
+            score += min(1.0, coverage / 1.5) * 0.1
+    except Exception:
+        pass
+    return {
+        "PMT_month": pmt,
+        "Total_payment": total_pay,
+        "DSR": dsr,
+        "LTV": ltv,
+        "Net_cashflow": net_cashflow,
+        "E_over_C": e_over_c,
+        "Debt_over_Income": debt_over_income,
+        "CFR": cfr,
+        "Coverage": coverage,
+        "Score": round(score, 3)
+    }
 
-# ==========================
-# Gemini API wrapper
-# ==========================
-GEMINI_API_URL = "https://api.example.com/gemini"
-
-def call_gemini(prompt, api_key, max_tokens=512):
+# ---------------------------
+# AI / Gemini wrapper
+# ---------------------------
+def call_gemini_api(prompt: str, api_key: str, model: str = GEMINI_MODEL, max_tokens: int = 512) -> str:
+    """Simple wrapper to call Gemini-like REST endpoint. The payload & headers might need adjustment to real API."""
+    if requests is None:
+        return "Requests library not available."
     if not api_key:
-        return "Chưa nhập API key!"
-
+        return "No API key configured."
     payload = {
-        "model": "gemini-2.5-flash",
+        "model": model,
         "prompt": prompt,
         "max_tokens": max_tokens
     }
@@ -430,638 +373,526 @@ def call_gemini(prompt, api_key, max_tokens=512):
     try:
         r = requests.post(GEMINI_API_URL, json=payload, headers=headers, timeout=30)
         if r.status_code == 200:
-            j = r.json()
-            if isinstance(j, dict):
-                for k in ["text", "output", "content", "response"]:
+            try:
+                j = r.json()
+                # attempt common fields
+                for k in ("text", "content", "output", "response"):
                     if k in j:
-                        return j[k]
-                if "choices" in j:
-                    return j["choices"][0].get("text", "")
-            return str(j)
-        return f"Lỗi Gemini API: {r.status_code} - {r.text}"
+                        return j[k] or str(j)
+                if "choices" in j and isinstance(j["choices"], list) and len(j["choices"]) > 0:
+                    ch = j["choices"][0]
+                    if isinstance(ch, dict):
+                        return ch.get("text") or ch.get("message", {}).get("content", "") or str(ch)
+                return str(j)
+            except Exception:
+                return r.text
+        else:
+            return f"Gemini API error {r.status_code}: {r.text}"
     except Exception as e:
-        return f"Lỗi gọi Gemini: {e}"
+        return f"Exception calling Gemini: {e}"
 
-# ==========================
-# Xuất Excel
-# ==========================
-def df_to_excel_bytes(df):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="amortization")
-    return output.getvalue()
+# ---------------------------
+# EXPORT: Excel / PDF / DOCX
+# ---------------------------
+def df_to_excel_bytes(df: pd.DataFrame, info: Dict[str, Any] = None, metrics: Dict[str, Any] = None) -> bytes:
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Amortization", index=False)
+        if info is not None:
+            pd.DataFrame([info]).to_excel(writer, sheet_name="Info", index=False)
+        if metrics is not None:
+            pd.DataFrame([metrics]).to_excel(writer, sheet_name="Metrics", index=False)
+    buf.seek(0)
+    return buf.getvalue()
 
-# ==========================
-# Xuất PDF bằng reportlab
-# ==========================
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
-from reportlab.lib.styles import getSampleStyleSheet
-
-def create_pdf_report(state, indicators, chart_image_bytes=None):
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-    doc = SimpleDocTemplate(tmp.name, pagesize=A4)
+def create_pdf_report_bytes(inputs: Dict[str, Any], metrics: Dict[str, Any], schedule_df: pd.DataFrame, chart_bytes: Optional[bytes], analysis_text: str = "") -> bytes:
+    if SimpleDocTemplate is None:
+        return b""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4)
     styles = getSampleStyleSheet()
     elems = []
-
     elems.append(Paragraph("BÁO CÁO THẨM ĐỊNH PHƯƠNG ÁN SỬ DỤNG VỐN", styles["Title"]))
-    elems.append(Spacer(1, 12))
-
-    elems.append(Paragraph(f"Khách hàng: {state.get('name1','')}", styles["Normal"]))
-    elems.append(Paragraph(f"Địa chỉ: {state.get('address','')}", styles["Normal"]))
-    elems.append(Paragraph(f"Số điện thoại: {state.get('phone','')}", styles["Normal"]))
-    elems.append(Spacer(1, 12))
-
-    elems.append(Paragraph("CÁC CHỈ TIÊU TÀI CHÍNH", styles["Heading2"]))
-    for k, v in indicators.items():
-        if v is None:
-            disp = "N/A"
-        elif k == "dsr":
-            disp = f"{v:.2%}"
-        elif k == "ltv":
-            disp = f"{v:.2f}%"
+    elems.append(Spacer(1, 6))
+    elems.append(Paragraph(f"Khách hàng: {inputs.get('name','')}", styles["Normal"]))
+    elems.append(Paragraph(f"Mục đích vay: {inputs.get('purpose','')}", styles["Normal"]))
+    elems.append(Spacer(1, 6))
+    elems.append(Paragraph("Các chỉ tiêu chính:", styles["Heading2"]))
+    for k, v in metrics.items():
+        if isinstance(v, float):
+            elems.append(Paragraph(f"{k}: {format_number_readable(v)}", styles["Normal"]))
         else:
-            disp = format_thousands(v)
-        elems.append(Paragraph(f"{k}: {disp}", styles["Normal"]))
-
-    elems.append(Spacer(1, 12))
-
-    if chart_image_bytes:
+            elems.append(Paragraph(f"{k}: {str(v)}", styles["Normal"]))
+    elems.append(Spacer(1, 6))
+    if chart_bytes:
         f = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        f.write(chart_image_bytes)
+        f.write(chart_bytes)
         f.flush()
-        elems.append(RLImage(f.name, width=400, height=250))
-
+        elems.append(RLImage(f.name, width=400, height=200))
+        elems.append(Spacer(1, 6))
+    if analysis_text:
+        elems.append(Paragraph("Phân tích AI:", styles["Heading2"]))
+        elems.append(Paragraph(analysis_text, styles["Normal"]))
     doc.build(elems)
+    buf.seek(0)
+    return buf.read()
 
-    with open(tmp.name, "rb") as f:
-        return f.read()
+def export_docx_bytes(inputs: Dict[str, Any], metrics: Dict[str, Any], schedule_df: pd.DataFrame, analysis_text: str = "") -> bytes:
+    if DocxWriter is None:
+        return b""
+    doc = DocxWriter()
+    doc.add_heading("BÁO CÁO THẨM ĐỊNH PHƯƠNG ÁN SỬ DỤNG VỐN", level=1)
+    doc.add_paragraph(f"Khách hàng: {inputs.get('name','')}")
+    doc.add_paragraph(f"Mục đích: {inputs.get('purpose','')}")
+    doc.add_paragraph("Chỉ tiêu:")
+    for k, v in metrics.items():
+        doc.add_paragraph(f"- {k}: {format_number_readable(v)}")
+    doc.add_paragraph()
+    doc.add_paragraph("Kế hoạch trả nợ (5 kỳ đầu):")
+    table = doc.add_table(rows=1, cols=6)
+    hdr = table.rows[0].cells
+    hdr[0].text = "Kỳ"
+    hdr[1].text = "Date"
+    hdr[2].text = "Payment"
+    hdr[3].text = "Principal"
+    hdr[4].text = "Interest"
+    hdr[5].text = "Remaining"
+    for i, row in schedule_df.head(5).iterrows():
+        r = table.add_row().cells
+        r[0].text = str(row["Month"])
+        r[1].text = str(row["Date"])
+        r[2].text = format_thousands_dot(row["Payment"])
+        r[3].text = format_thousands_dot(row["Principal"])
+        r[4].text = format_thousands_dot(row["Interest"])
+        r[5].text = format_thousands_dot(row["Remaining"])
+    if analysis_text:
+        doc.add_page_break()
+        doc.add_heading("Phân tích AI", level=2)
+        doc.add_paragraph(analysis_text)
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
 
-# ==========================
-# METRIC CARD COMPONENT
-# ==========================
-def metric_card(label, value, icon="💰"):
-    st.markdown(f"""
-    <div class="metric-card">
-        <div style="font-size: 2em;">{icon}</div>
-        <div class="metric-label">{label}</div>
-        <div class="metric-value">{value}</div>
-    </div>
-    """, unsafe_allow_html=True)
+# ---------------------------
+# STREAMLIT UI
+# ---------------------------
+st.set_page_config(page_title="PASDV - Analyzer", layout="wide")
 
-# =============================================================
-# BẮT ĐẦU ỨNG DỤNG STREAMLIT
-# =============================================================
-st.set_page_config(
-    page_title="PASDV Analyzer", 
-    layout="wide",
-    page_icon="💼",
-    initial_sidebar_state="expanded"
-)
+st.title("PASDV Analyzer — Phân tích Phương Án Sử Dụng Vốn")
+st.markdown("Giao diện: phân tab — nhập/ chỉnh sửa — tính toán — AI Gemini — export")
 
-# Load Custom CSS
-load_custom_css()
-
-# Header với animation
-st.markdown("""
-<div class="main-title">
-    <h1 style='text-align: center; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);'>
-        💼 PHÂN TÍCH PHƯƠNG ÁN SỬ DỤNG VỐN
-    </h1>
-    <p style='text-align: center; color: rgba(255,255,255,0.9); font-size: 1.2em;'>
-        Ứng dụng hỗ trợ cán bộ tín dụng – Phiên bản hiện đại ❤️
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# --------------------------
-# Sidebar: API key Gemini
-# --------------------------
+# Sidebar: API key + options (left)
 with st.sidebar:
-    st.markdown("### ⚙️ Cấu hình hệ thống")
-    api_key = st.text_input("🔑 API Key Gemini", type="password")
-    
+    st.header("Cấu hình")
+    api_key = st.text_input("API Key Gemini (gemini-2.5-flash)", type="password")
+    st.write("Bạn có thể nhập API key ở đây để bật phân tích AI và chatbox.")
     st.markdown("---")
-    st.markdown("### 📤 Tùy chọn xuất dữ liệu")
-    export_choice = st.selectbox(
-        "Chọn định dạng",
-        ["Không xuất", "Xuất Excel lịch trả nợ", "Xuất PDF thẩm định"]
-    )
-    
+    st.write("Xuất báo cáo:")
+    default_export = st.selectbox("Định dạng mặc định khi tải", ["PDF", "DOCX", "Excel"], index=0)
     st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; padding: 20px;'>
-        <p style='color: rgba(255,255,255,0.8);'>🧡 Ứng dụng PASDV</p>
-        <p style='color: rgba(255,255,255,0.6); font-size: 0.9em;'>
-            Phiên bản hiện đại<br>
-            Designed with ❤️
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.write("Ghi chú:")
+    st.caption("Format số: hàng nghìn phân cách bằng dấu '.' (ví dụ: 1.000.000)")
 
-# --------------------------
-# State khởi tạo
-# --------------------------
-if "state" not in st.session_state:
-    st.session_state["state"] = {
-        "name1": "",
+# Initialize session state containers
+if "inputs" not in st.session_state:
+    st.session_state["inputs"] = {
+        "name": "",
+        "cccd": "",
+        "address": "",
         "phone": "",
         "email": "",
-        "address": "",
-        "total_need": 0,
-        "own_capital": 0,
-        "loan_amount": 0,
+        "purpose": "",
+        "total_need": 0.0,
+        "own_capital": 0.0,
+        "loan_amount": 0.0,
         "interest_rate": 8.5,
         "term_months": 60,
-        "asset_value": 0,
-        "monthly_income": 0,
-        "monthly_expense": 0
+        "project_income_month": 0.0,
+        "salary_income_month": 0.0,
+        "total_income_month": 0.0,
+        "monthly_expense": 0.0,
+        "collateral_value": 0.0,
+        "tong_no_hien_tai": 0.0,
     }
-
+if "raw_upload_text" not in st.session_state:
+    st.session_state["raw_upload_text"] = ""
+if "amortization" not in st.session_state:
+    st.session_state["amortization"] = pd.DataFrame()
+if "analysis_file" not in st.session_state:
+    st.session_state["analysis_file"] = ""
+if "analysis_inputs" not in st.session_state:
+    st.session_state["analysis_inputs"] = ""
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
-state = st.session_state["state"]
-
-# =============================================================
-# Giao diện chính — chia 2 cột
-# =============================================================
-left_col, right_col = st.columns([1, 3])
-
-# ===========================
-# LEFT: Upload & Reset
-# ===========================
-with left_col:
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### 📂 Upload hồ sơ")
-
-    uploaded_file = st.file_uploader(
-        "Kéo thả hoặc chọn file .docx", 
-        type=["docx"],
-        help="Tải lên file phương án vay vốn"
-    )
-
-    if uploaded_file:
-        with st.spinner("🔄 Đang xử lý file..."):
-            text = extract_text_from_docx(uploaded_file)
-            parsed = extract_data_from_docx_text(text)
-
+# Upload area (left column)
+upload_col, tabs_col = st.columns([1, 3])
+with upload_col:
+    st.header("Upload hồ sơ (.docx)")
+    uploaded = st.file_uploader("Upload file PASDV (.docx) để tự động trích xuất", type=["docx"])
+    if uploaded is not None:
+        try:
+            raw_text = extract_text_docx_bytes(uploaded.read())
+            st.session_state["raw_upload_text"] = raw_text
+            st.success("Đã đọc file. Xin kiểm tra và chỉnh sửa bên tab '1. Identification'.")
+            # parse heuristics
+            parsed = extract_fields_from_text(raw_text)
+            # merge parsed into inputs but do not overwrite non-empty manual edits
             for k, v in parsed.items():
-                if v is not None:
-                    state[k] = v
-
-            st.success("✅ Trích xuất dữ liệu thành công!")
-            with st.expander("📄 Xem nội dung file"):
-                st.text_area("", text[:5000], height=200)
-
+                if v is None:
+                    continue
+                # map parsed keys to session inputs
+                if k == "name" and parsed["name"]:
+                    st.session_state["inputs"]["name"] = parsed["name"]
+                if k == "cccd" and parsed["cccd"]:
+                    st.session_state["inputs"]["cccd"] = parsed["cccd"]
+                if k == "address" and parsed["address"]:
+                    st.session_state["inputs"]["address"] = parsed["address"]
+                if k == "phone" and parsed["phone"]:
+                    st.session_state["inputs"]["phone"] = parsed["phone"]
+                if k == "email" and parsed["email"]:
+                    st.session_state["inputs"]["email"] = parsed["email"]
+                if k == "purpose" and parsed["purpose"]:
+                    st.session_state["inputs"]["purpose"] = parsed["purpose"]
+                if k == "total_need" and parsed["total_need"]:
+                    st.session_state["inputs"]["total_need"] = parsed["total_need"]
+                if k == "own_capital" and parsed["own_capital"]:
+                    st.session_state["inputs"]["own_capital"] = parsed["own_capital"]
+                if k == "loan_amount" and parsed["loan_amount"]:
+                    st.session_state["inputs"]["loan_amount"] = parsed["loan_amount"]
+                if k == "interest_rate" and parsed["interest_rate"]:
+                    st.session_state["inputs"]["interest_rate"] = parsed["interest_rate"]
+                if k == "term_months" and parsed["term_months"]:
+                    st.session_state["inputs"]["term_months"] = parsed["term_months"]
+                if k == "project_income_month" and parsed["project_income_month"]:
+                    st.session_state["inputs"]["project_income_month"] = parsed["project_income_month"]
+                if k == "salary_income_month" and parsed["salary_income_month"]:
+                    st.session_state["inputs"]["salary_income_month"] = parsed["salary_income_month"]
+                if k == "total_income_month" and parsed["total_income_month"]:
+                    st.session_state["inputs"]["total_income_month"] = parsed["total_income_month"]
+                if k == "monthly_expense" and parsed["monthly_expense"]:
+                    st.session_state["inputs"]["monthly_expense"] = parsed["monthly_expense"]
+                if k == "collateral_value" and parsed["collateral_value"]:
+                    st.session_state["inputs"]["collateral_value"] = parsed["collateral_value"]
+            # ensure total_income_month sensible
+            if st.session_state["inputs"]["total_income_month"] == 0:
+                st.session_state["inputs"]["total_income_month"] = st.session_state["inputs"].get("salary_income_month", 0.0) + st.session_state["inputs"].get("project_income_month", 0.0)
+        except Exception as e:
+            st.error(f"Lỗi khi đọc file: {e}")
     st.markdown("---")
-
-    if st.button("🔄 Reset dữ liệu", use_container_width=True):
-        st.session_state["state"] = {
-            "name1": "",
-            "phone": "",
-            "email": "",
-            "address": "",
-            "total_need": 0,
-            "own_capital": 0,
-            "loan_amount": 0,
-            "interest_rate": 8.5,
-            "term_months": 60,
-            "asset_value": 0,
-            "monthly_income": 0,
-            "monthly_expense": 0
-        }
-        st.rerun()
-    
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# =============================================================
-# RIGHT: Tabs
-# =============================================================
-with right_col:
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    
-    tabs = st.tabs([
-        "👤 Định danh",
-        "💰 Tài chính",
-        "🏠 Tài sản",
-        "📊 Tính toán",
-        "📈 Biểu đồ",
-        "🤖 AI",
-        "💬 Chat",
-        "📤 Xuất file"
-    ])
-
-    # ----------------------------------------------------------
-    # Helper: Numeric with +/-
-    # ----------------------------------------------------------
-    def numeric_editor(label, key, step=1000000):
-        c1, c2, c3 = st.columns([3, 1, 1])
-        with c1:
-            txt = st.text_input(label, value=str(state.get(key, 0)))
-            try:
-                val = int(txt.replace(".", "").replace(",", ""))
-                state[key] = val
-            except:
-                pass
-        with c2:
-            if st.button("➕", key=f"plus_{key}", use_container_width=True):
-                state[key] = state.get(key, 0) + step
-                st.rerun()
-        with c3:
-            if st.button("➖", key=f"minus_{key}", use_container_width=True):
-                state[key] = max(0, state.get(key, 0) - step)
-                st.rerun()
-
-    # =========================================================
-    # TAB 1 – ĐỊNH DANH
-    # =========================================================
-    with tabs[0]:
-        st.markdown("### 👤 Thông tin định danh khách hàng")
-        st.markdown("---")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            state["name1"] = st.text_input("👨‍💼 Họ và tên", value=state.get("name1", ""))
-            state["address"] = st.text_input("🏡 Địa chỉ", value=state.get("address", ""))
-        with col2:
-            state["phone"] = st.text_input("📱 Số điện thoại", value=state.get("phone", ""))
-            state["email"] = st.text_input("📧 Email", value=state.get("email", ""))
-
-    # =========================================================
-    # TAB 2 – TÀI CHÍNH
-    # =========================================================
-    with tabs[1]:
-        st.markdown("### 💰 Thông tin tài chính & phương án vay")
-        st.markdown("---")
-
-        state["purpose"] = st.text_input("🎯 Mục đích vay", value=state.get("purpose", "Mua nhà"))
-
-        numeric_editor("💵 Tổng nhu cầu vốn (VND)", "total_need", step=100000000)
-        numeric_editor("💼 Vốn đối ứng (VND)", "own_capital", step=100000000)
-        numeric_editor("🏦 Số tiền vay (VND)", "loan_amount", step=100000000)
-
-        st.markdown("---")
-        
-        cA, cB = st.columns(2)
-        with cA:
-            state["interest_rate"] = st.number_input(
-                "📊 Lãi suất (%/năm)", 
-                value=float(state.get("interest_rate", 8.5)),
-                min_value=0.0,
-                max_value=100.0,
-                step=0.1
-            )
-        with cB:
-            state["term_months"] = st.number_input(
-                "📅 Thời hạn vay (tháng)", 
-                value=int(state.get("term_months", 60)), 
-                min_value=1,
-                max_value=360
-            )
-        
-        # Thêm thông tin thu nhập chi phí
-        st.markdown("---")
-        st.markdown("#### 💳 Thu nhập & Chi phí")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            numeric_editor("📈 Thu nhập hàng tháng (VND)", "monthly_income", step=10000000)
-        with col2:
-            numeric_editor("📉 Chi phí hàng tháng (VND)", "monthly_expense", step=5000000)
-
-    # =========================================================
-    # TAB 3 – TÀI SẢN BẢO ĐẢM
-    # =========================================================
-    with tabs[2]:
-        st.markdown("### 🏠 Tài sản bảo đảm")
-        st.markdown("---")
-
-        state["asset_type"] = st.text_input(
-            "🏘️ Loại tài sản", 
-            value=state.get("asset_type", "Nhà & đất")
-        )
-        
-        numeric_editor("💎 Giá trị tài sản (VND)", "asset_value", step=100000000)
-
-        st.markdown("---")
-        
-        state["asset_address"] = st.text_input(
-            "📍 Địa chỉ tài sản", 
-            value=state.get("asset_address", "")
-        )
-        state["asset_docs"] = st.text_input(
-            "📋 Giấy tờ pháp lý", 
-            value=state.get("asset_docs", "GCN QSDĐ")
-        )
-
-    # =========================================================
-    # TAB 4 – TÍNH TOÁN
-    # =========================================================
-    with tabs[3]:
-        st.markdown("### 📊 Kết quả tính toán chi tiết")
-        st.markdown("---")
-
-        indicators = compute_indicators(state)
-
-        # Display metrics in cards
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            metric_card(
-                "Thanh toán hàng tháng",
-                format_thousands(indicators["monthly_payment"]) + " VND",
-                "💵"
-            )
-        
-        with col2:
-            ltv_val = f"{indicators['ltv']:.2f}%" if indicators["ltv"] else "N/A"
-            metric_card("LTV Ratio", ltv_val, "📊")
-        
-        with col3:
-            dsr_val = f"{indicators['dsr']:.2%}" if indicators["dsr"] else "N/A"
-            metric_card("DSR Ratio", dsr_val, "📈")
-
-        st.markdown("---")
-        st.markdown("#### 📋 Chi tiết các chỉ tiêu")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.info(f"**💰 Tổng thanh toán:** {format_thousands(indicators['total_payment'])} VND")
-            st.info(f"**📊 DSR:** {f'{indicators["dsr"]:.2%}' if indicators['dsr'] else 'N/A'}")
-            st.info(f"**💎 LTV:** {f'{indicators["ltv"]:.2f}%' if indicators['ltv'] else 'N/A'}")
-        
-        with col2:
-            net_cf = indicators["net_cashflow"]
-            if net_cf >= 0:
-                st.success(f"**✅ Dòng tiền ròng:** +{format_thousands(net_cf)} VND")
+    if st.button("Reset tất cả"):
+        for k in st.session_state["inputs"].keys():
+            if isinstance(st.session_state["inputs"][k], (int, float)):
+                st.session_state["inputs"][k] = 0.0
             else:
-                st.error(f"**❌ Dòng tiền ròng:** {format_thousands(net_cf)} VND")
-            
-            if indicators.get("dsr"):
-                if indicators["dsr"] <= 0.4:
-                    st.success("**✅ DSR:** Tốt (≤40%)")
-                elif indicators["dsr"] <= 0.5:
-                    st.warning("**⚠️ DSR:** Chấp nhận được (40-50%)")
-                else:
-                    st.error("**❌ DSR:** Rủi ro cao (>50%)")
+                st.session_state["inputs"][k] = ""
+        st.session_state["raw_upload_text"] = ""
+        st.session_state["amortization"] = pd.DataFrame()
+        st.experimental_rerun()
+    st.markdown("### Preview trích xuất")
+    st.text_area("Raw extracted text (preview)", st.session_state["raw_upload_text"], height=250)
 
-        st.markdown("---")
-        
-        if st.button("📅 Tạo lịch trả nợ chi tiết", use_container_width=True):
-            with st.spinner("Đang tạo lịch trả nợ..."):
-                df_am = generate_amortization_schedule(
-                    state.get("loan_amount", 0),
-                    state.get("interest_rate", 0),
-                    state.get("term_months", 0),
-                )
-                st.session_state["amortization"] = df_am
-                st.success("✅ Đã tạo lịch trả nợ thành công!")
+# Tabs for data and actions
+tabs = tabs_col.tabs([
+    "1. Identification",
+    "2. Finance",
+    "3. Collateral",
+    "4. Calculations",
+    "5. Charts",
+    "6. AI Analysis",
+    "7. Chatbox",
+    "8. Export"
+])
 
-    # =========================================================
-    # TAB 5 – BIỂU ĐỒ
-    # =========================================================
-    with tabs[4]:
-        st.markdown("### 📈 Biểu đồ phân tích trực quan")
-        st.markdown("---")
+# ---------------------------
+# Tab 1: Identification
+# ---------------------------
+with tabs[0]:
+    st.header("1. Identification")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.text_input("Họ và tên khách hàng", key="name_input", value=st.session_state["inputs"]["name"], on_change=lambda: st.session_state["inputs"].update({"name": st.session_state.get("name_input","")}))
+        st.text_input("CCCD/CMND", key="cccd_input", value=st.session_state["inputs"].get("cccd",""), on_change=lambda: st.session_state["inputs"].update({"cccd": st.session_state.get("cccd_input","")}))
+        st.text_input("Nơi cư trú", key="address_input", value=st.session_state["inputs"]["address"], on_change=lambda: st.session_state["inputs"].update({"address": st.session_state.get("address_input","")}))
+    with col2:
+        st.text_input("Số điện thoại", key="phone_input", value=st.session_state["inputs"].get("phone",""), on_change=lambda: st.session_state["inputs"].update({"phone": st.session_state.get("phone_input","")}))
+        st.text_input("Email", key="email_input", value=st.session_state["inputs"].get("email",""), on_change=lambda: st.session_state["inputs"].update({"email": st.session_state.get("email_input","")}))
+        st.text_input("Mục đích vay", key="purpose_input", value=st.session_state["inputs"].get("purpose",""), on_change=lambda: st.session_state["inputs"].update({"purpose": st.session_state.get("purpose_input","")}))
 
-        df_am = st.session_state.get("amortization")
+# helper to show numeric input with +/- buttons and dot formatting
+def vn_money_widget(label: str, session_key: str, step: float = 1000000.0):
+    col_a, col_b, col_c = st.columns([3, 1, 1])
+    current = st.session_state["inputs"].get(session_key, 0.0)
+    display = format_thousands_dot(current)
+    with col_a:
+        raw = st.text_input(label, value=display, key=f"txt_{session_key}")
+        # parse when changed
+        parsed = vnd_to_float(raw)
+        st.session_state["inputs"][session_key] = parsed
+    with col_b:
+        if st.button("+", key=f"plus_{session_key}"):
+            st.session_state["inputs"][session_key] = st.session_state["inputs"].get(session_key, 0.0) + step
+    with col_c:
+        if st.button("-", key=f"minus_{session_key}"):
+            st.session_state["inputs"][session_key] = max(0.0, st.session_state["inputs"].get(session_key, 0.0) - step)
 
-        if df_am is None:
-            df_am = generate_amortization_schedule(
-                state.get("loan_amount", 0),
-                state.get("interest_rate", 0),
-                state.get("term_months", 0),
-            )
+def percent_widget(label: str, session_key: str):
+    col_a, col_b = st.columns([3, 1])
+    current = st.session_state["inputs"].get(session_key, 0.0)
+    display = f"{current:.2f}".replace(".", ",")
+    with col_a:
+        raw = st.text_input(label, value=display, key=f"pct_{session_key}")
+        st.session_state["inputs"][session_key] = percent_to_float(raw)
+    with col_b:
+        st.write("")  # spacer
 
-        if not df_am.empty:
-            # Plotly interactive chart
-            fig = go.Figure()
-            
-            fig.add_trace(go.Scatter(
-                x=df_am["Month"], 
-                y=df_am["Payment"],
-                name="Thanh toán",
-                line=dict(color='#667eea', width=3),
-                fill='tonexty'
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=df_am["Month"], 
-                y=df_am["Principal"],
-                name="Gốc",
-                line=dict(color='#764ba2', width=2)
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=df_am["Month"], 
-                y=df_am["Interest"],
-                name="Lãi",
-                line=dict(color='#f093fb', width=2)
-            ))
-            
-            fig.update_layout(
-                title="Biểu đồ dòng tiền trả nợ theo tháng",
-                xaxis_title="Tháng",
-                yaxis_title="Số tiền (VND)",
-                hovermode='x unified',
-                template='plotly_white',
-                height=500
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # Pie chart for total payment breakdown
-            total_principal = df_am["Principal"].sum()
-            total_interest = df_am["Interest"].sum()
-            
-            fig2 = go.Figure(data=[go.Pie(
-                labels=['Gốc', 'Lãi'],
-                values=[total_principal, total_interest],
-                hole=.4,
-                marker_colors=['#667eea', '#f093fb']
-            )])
-            
-            fig2.update_layout(
-                title="Tỷ lệ Gốc/Lãi trong tổng thanh toán",
-                height=400
-            )
-            
-            st.plotly_chart(fig2, use_container_width=True)
-        else:
-            st.info("📊 Chưa có dữ liệu để hiển thị biểu đồ. Vui lòng nhập thông tin vay vốn.")
+# ---------------------------
+# Tab 2: Finance
+# ---------------------------
+with tabs[1]:
+    st.header("2. Finance / Loan")
+    vn_money_widget("Tổng nhu cầu vốn (VND)", "total_need", step=100_000_000)
+    vn_money_widget("Vốn đối ứng (VND)", "own_capital", step=50_000_000)
+    vn_money_widget("Số tiền vay (VND)", "loan_amount", step=100_000_000)
+    percent_widget("Lãi suất (%/năm)", "interest_rate")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        st.number_input("Thời hạn vay (tháng)", min_value=1, max_value=600, value=int(st.session_state["inputs"].get("term_months", 60)), key="term_months_input", on_change=lambda: st.session_state["inputs"].update({"term_months": int(st.session_state.get("term_months_input",60))}))
+    with col_b:
+        # display computed ratio total_need vs (own + loan)
+        tn = st.session_state["inputs"].get("total_need", 0.0)
+        own = st.session_state["inputs"].get("own_capital", 0.0)
+        loan = st.session_state["inputs"].get("loan_amount", 0.0)
+        st.write("Tổng nhu cầu (hiện):", format_thousands_dot(tn))
+        st.write("Vốn đối ứng + Vay:", format_thousands_dot(own + loan))
+        if tn != 0 and abs((own + loan) - tn) > 1.0:
+            st.warning("Lưu ý: Tổng vốn đối ứng + Số tiền vay khác Tổng nhu cầu vốn. Hãy kiểm tra/ chỉnh sửa nếu cần.")
 
-    # =========================================================
-    # TAB 6 – PHÂN TÍCH AI
-    # =========================================================
-    with tabs[5]:
-        st.markdown("### 🤖 Phân tích thông minh với Gemini AI")
-        st.markdown("---")
+# ---------------------------
+# Tab 3: Collateral
+# ---------------------------
+with tabs[2]:
+    st.header("3. Collateral / Tài sản bảo đảm")
+    vn_money_widget("Giá trị TSĐB (VND)", "collateral_value", step=100_000_000)
+    st.text_input("Địa chỉ TSĐB (nếu có)", key="collateral_address", value=st.session_state["inputs"].get("collateral_address",""), on_change=lambda: st.session_state["inputs"].update({"collateral_address": st.session_state.get("collateral_address","")}))
+    st.text_input("Giấy tờ pháp lý", key="collateral_docs", value=st.session_state["inputs"].get("collateral_docs",""), on_change=lambda: st.session_state["inputs"].update({"collateral_docs": st.session_state.get("collateral_docs","")}))
 
-        # Phân tích File Upload
-        st.markdown("#### 📝 Phân tích dựa vào file upload")
-        
-        if st.button("🔍 Phân tích File", use_container_width=True):
-            if not uploaded_file:
-                st.warning("⚠️ Chưa có file upload!")
+# ---------------------------
+# Tab 4: Calculations
+# ---------------------------
+with tabs[3]:
+    st.header("4. Calculations & Indicators")
+    # ensure derived total_income_month computed
+    if st.session_state["inputs"].get("total_income_month", 0.0) == 0:
+        st.session_state["inputs"]["total_income_month"] = st.session_state["inputs"].get("salary_income_month", 0.0) + st.session_state["inputs"].get("project_income_month", 0.0)
+    st.write("Thu nhập tháng (Tổng):", format_thousands_dot(st.session_state["inputs"].get("total_income_month", 0.0)))
+    metrics = compute_indicators_from_inputs({
+        "loan_amount": st.session_state["inputs"].get("loan_amount", 0.0),
+        "interest_rate": st.session_state["inputs"].get("interest_rate", 0.0),
+        "term_months": st.session_state["inputs"].get("term_months", 60),
+        "total_income_month": st.session_state["inputs"].get("total_income_month", 0.0),
+        "monthly_expense": st.session_state["inputs"].get("monthly_expense", 0.0),
+        "collateral_value": st.session_state["inputs"].get("collateral_value", 0.0),
+        "own_capital": st.session_state["inputs"].get("own_capital", 0.0),
+        "total_need": st.session_state["inputs"].get("total_need", 0.0),
+        "tong_no_hien_tai": st.session_state["inputs"].get("tong_no_hien_tai", 0.0)
+    })
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("Thanh toán hàng tháng (PMT)", format_thousands_dot(metrics["PMT_month"]))
+        st.metric("Tổng trả (ước tính)", format_thousands_dot(metrics["Total_payment"]))
+    with c2:
+        st.metric("DSR (<= 80%)", f"{metrics['DSR']*100:.2f}%" if not math.isnan(metrics["DSR"]) else "n/a")
+        st.metric("LTV (<= 80%)", f"{metrics['LTV']*100:.2f}%" if not math.isnan(metrics["LTV"]) else "n/a")
+    with c3:
+        st.metric("CFR (cash flow ratio)", f"{metrics['CFR']*100:.2f}%" if not math.isnan(metrics["CFR"]) else "n/a")
+        st.metric("Coverage", f"{metrics['Coverage']:.2f}" if not math.isnan(metrics["Coverage"]) else "n/a")
+    st.markdown("**Ghi chú:** Số liệu tính toán theo phương pháp annuity (trả đều).")
+
+    if st.button("Tạo lịch trả nợ (amortization)"):
+        schedule = amortization_schedule(
+            principal=st.session_state["inputs"].get("loan_amount", 0.0),
+            annual_rate_pct=st.session_state["inputs"].get("interest_rate", 0.0),
+            months=int(st.session_state["inputs"].get("term_months", 60)),
+            start_date=datetime.date.today()
+        )
+        st.session_state["amortization"] = schedule
+        st.success("Đã tạo lịch trả nợ. Sang tab 'Charts' hoặc 'Export' để tải.")
+
+# ---------------------------
+# Tab 5: Charts
+# ---------------------------
+with tabs[4]:
+    st.header("5. Charts")
+    schedule = st.session_state.get("amortization")
+    if schedule is None or schedule.empty:
+        schedule = amortization_schedule(
+            principal=st.session_state["inputs"].get("loan_amount", 0.0),
+            annual_rate_pct=st.session_state["inputs"].get("interest_rate", 0.0),
+            months=int(st.session_state["inputs"].get("term_months", 60)),
+            start_date=datetime.date.today()
+        )
+    if plt is None:
+        st.warning("Matplotlib chưa cài: không thể vẽ biểu đồ.")
+    else:
+        fig, ax = plt.subplots(figsize=(9, 4))
+        ax.plot(schedule["Month"], schedule["Payment"], label="Payment")
+        ax.plot(schedule["Month"], schedule["Principal"], label="Principal")
+        ax.plot(schedule["Month"], schedule["Interest"], label="Interest")
+        ax.set_xlabel("Month")
+        ax.set_ylabel("VND")
+        ax.legend()
+        st.pyplot(fig)
+        # capture chart bytes for PDF
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        chart_png = buf.getvalue()
+
+    st.markdown("Biểu đồ nghĩa vụ trả nợ - thanh toán, tiền gốc, tiền lãi theo kỳ.")
+
+# ---------------------------
+# Tab 6: AI Analysis (two parts)
+# ---------------------------
+with tabs[5]:
+    st.header("6. Phân tích AI (Gemini)")
+    colA, colB = st.columns(2)
+    with colA:
+        st.subheader("A. Phân tích dựa trên File Upload")
+        st.markdown("Nguồn dữ liệu: File .docx upload (raw)")
+        if st.button("Phân tích từ File Upload"):
+            if not st.session_state.get("raw_upload_text"):
+                st.warning("Chưa upload file hoặc file không có nội dung.")
             else:
-                uploaded_file.seek(0)
-                raw_text = extract_text_from_docx(uploaded_file)
-
                 prompt = (
-                    "Hãy phân tích hồ sơ vay vốn dưới đây, tập trung vào rủi ro, "
-                    "khả năng trả nợ, nguồn trả nợ, tài sản bảo đảm và kết luận đề xuất.\n\n"
-                    f"--- DỮ LIỆU TỪ FILE UPLOAD ---\n{raw_text[:5000]}"
+                    "Bạn là chuyên viên thẩm định tín dụng.\n"
+                    "Hãy phân tích ngắn gọn (tối đa 300 từ) phương án vay dựa trên dữ liệu gốc dưới đây.\n"
+                    "Trả lời gồm: tóm tắt; rủi ro chính; khả năng trả nợ; đề xuất (cho vay/cho vay có điều kiện/không cho vay).\n\n"
+                    f"--- Dữ liệu gốc (file upload):\n{st.session_state.get('raw_upload_text')[:6000]}"
                 )
+                with st.spinner("Gọi Gemini..."):
+                    out = call_gemini_api(prompt, api_key or "", model=GEMINI_MODEL, max_tokens=600)
+                    st.session_state["analysis_file"] = out
+                    st.success("Hoàn tất phân tích từ file.")
+        if st.session_state.get("analysis_file"):
+            st.text_area("Kết quả phân tích (File Upload)", st.session_state.get("analysis_file"), height=250)
 
-                with st.spinner("🤖 Gemini đang phân tích..."):
-                    ai_result = call_gemini(prompt, api_key)
-                    st.markdown("**📊 Kết quả phân tích:**")
-                    st.info(ai_result)
-
-        st.markdown("---")
-
-        # Phân tích dữ liệu đã nhập
-        st.markdown("#### ✏️ Phân tích dựa vào dữ liệu đã chỉnh sửa")
-
-        if st.button("🔍 Phân tích Dữ liệu", use_container_width=True):
+    with colB:
+        st.subheader("B. Phân tích dựa trên dữ liệu đã chỉnh sửa")
+        st.markdown("Nguồn dữ liệu: Dữ liệu nhập/chỉnh sửa (GUI)")
+        if st.button("Phân tích từ dữ liệu đã chỉnh sửa"):
+            inputs_snapshot = st.session_state["inputs"].copy()
+            metrics_snapshot = compute_indicators_from_inputs({
+                "loan_amount": inputs_snapshot.get("loan_amount", 0.0),
+                "interest_rate": inputs_snapshot.get("interest_rate", 0.0),
+                "term_months": inputs_snapshot.get("term_months", 60),
+                "total_income_month": inputs_snapshot.get("total_income_month", 0.0),
+                "monthly_expense": inputs_snapshot.get("monthly_expense", 0.0),
+                "collateral_value": inputs_snapshot.get("collateral_value", 0.0),
+                "own_capital": inputs_snapshot.get("own_capital", 0.0),
+                "total_need": inputs_snapshot.get("total_need", 0.0),
+                "tong_no_hien_tai": inputs_snapshot.get("tong_no_hien_tai", 0.0)
+            })
             prompt2 = (
-                "Hãy phân tích hồ sơ vay vốn dựa trên dữ liệu nhập liệu.\n\n"
-                "--- DỮ LIỆU NHẬP LIỆU ---\n"
-                f"{state}\n\n"
-                "--- CÁC CHỈ TIÊU TÍNH TOÁN ---\n"
-                f"{compute_indicators(state)}"
+                "Bạn là chuyên viên thẩm định tín dụng.\n"
+                "Phân tích hồ sơ sau dựa trên các chỉ số đã tính và dữ liệu chỉnh sửa (nguồn: giao diện người dùng).\n"
+                "Trả lời gồm: tóm tắt số liệu quan trọng; rủi ro; đề xuất (ngắn gọn <= 300 từ).\n\n"
+                f"--- Dữ liệu nhập:\n{json.dumps(inputs_snapshot, ensure_ascii=False)}\n\n"
+                f"--- Chỉ số tính toán:\n{json.dumps(metrics_snapshot, ensure_ascii=False)}"
             )
+            with st.spinner("Gọi Gemini..."):
+                out2 = call_gemini_api(prompt2, api_key or "", model=GEMINI_MODEL, max_tokens=600)
+                st.session_state["analysis_inputs"] = out2
+                st.success("Hoàn tất phân tích từ dữ liệu đã chỉnh sửa.")
+        if st.session_state.get("analysis_inputs"):
+            st.text_area("Kết quả phân tích (Dữ liệu đã chỉnh sửa)", st.session_state.get("analysis_inputs"), height=250)
 
-            with st.spinner("🤖 Gemini đang phân tích..."):
-                ai_result2 = call_gemini(prompt2, api_key)
-                st.markdown("**📊 Kết quả phân tích:**")
-                st.success(ai_result2)
-
-    # =========================================================
-    # TAB 7 – CHAT GEMINI
-    # =========================================================
-    with tabs[6]:
-        st.markdown("### 💬 Chat trực tiếp với Gemini AI")
-        st.markdown("---")
-
-        # Chat input
-        chat_input = st.text_input("💭 Nhập câu hỏi của bạn:", key="chat_input")
-
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            send_btn = st.button("📤 Gửi", use_container_width=True)
-        with col2:
-            clear_btn = st.button("🗑️ Xóa", use_container_width=True)
-
-        if send_btn and chat_input:
-            st.session_state["chat_history"].append(("User", chat_input))
-            with st.spinner("Đang xử lý..."):
-                reply = call_gemini(chat_input, api_key)
-                st.session_state["chat_history"].append(("Gemini", reply))
-            st.rerun()
-
-        if clear_btn:
-            st.session_state["chat_history"] = []
-            st.rerun()
-
-        # Display chat history
-        st.markdown("---")
-        st.markdown("#### 💬 Lịch sử hội thoại")
-        
-        for role, msg in reversed(st.session_state["chat_history"]):
-            if role == "User":
-                st.markdown(f"""
-                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                            padding: 15px; border-radius: 15px; margin: 10px 0; color: white;'>
-                    <strong>🧑 Bạn:</strong> {msg}
-                </div>
-                """, unsafe_allow_html=True)
+# ---------------------------
+# Tab 7: Chatbox Gemini
+# ---------------------------
+with tabs[6]:
+    st.header("7. Chatbox Gemini")
+    st.markdown("Chat trực tiếp với Gemini (API key required). Nút 'Clear' để xóa lịch sử chat.")
+    col1, col2 = st.columns([4,1])
+    with col1:
+        question = st.text_input("Nhập câu hỏi cho AI về hồ sơ này...")
+    with col2:
+        if st.button("Gửi"):
+            if not question:
+                st.warning("Nhập câu hỏi trước.")
             else:
-                st.markdown(f"""
-                <div style='background: #f7fafc; padding: 15px; border-radius: 15px; 
-                            margin: 10px 0; border-left: 4px solid #667eea;'>
-                    <strong>🤖 Gemini:</strong> {msg}
-                </div>
-                """, unsafe_allow_html=True)
+                st.session_state["chat_history"].append({"role": "user", "text": question})
+                # prepare context: include either raw file text or inputs summary
+                context = st.session_state.get("raw_upload_text") or json.dumps(st.session_state["inputs"], ensure_ascii=False)
+                prompt_chat = f"Người dùng hỏi: {question}\nContext: {context[:4000]}"
+                with st.spinner("Gọi Gemini..."):
+                    resp = call_gemini_api(prompt_chat, api_key or "", model=GEMINI_MODEL, max_tokens=400)
+                    st.session_state["chat_history"].append({"role": "assistant", "text": resp})
+    col3, col4 = st.columns([1,1])
+    with col3:
+        if st.button("Xóa hội thoại"):
+            st.session_state["chat_history"] = []
+            st.success("Đã xóa.")
+    # display chat
+    for msg in st.session_state["chat_history"]:
+        if msg["role"] == "user":
+            st.markdown(f"**Bạn:** {msg['text']}")
+        else:
+            st.markdown(f"**Gemini:** {msg['text']}")
 
-    # =========================================================
-    # TAB 8 – XUẤT FILE
-    # =========================================================
-    with tabs[7]:
-        st.markdown("### 📤 Xuất file báo cáo")
-        st.markdown("---")
+# ---------------------------
+# Tab 8: Export
+# ---------------------------
+with tabs[7]:
+    st.header("8. Export")
+    # ensure amortization built
+    schedule = st.session_state.get("amortization")
+    if schedule is None or schedule.empty:
+        schedule = amortization_schedule(
+            principal=st.session_state["inputs"].get("loan_amount", 0.0),
+            annual_rate_pct=st.session_state["inputs"].get("interest_rate", 0.0),
+            months=int(st.session_state["inputs"].get("term_months", 60)),
+            start_date=datetime.date.today()
+        )
+    st.subheader("Xuất bảng kê / báo cáo")
+    exp_choice = st.selectbox("Chọn xuất", ["Excel - Kế hoạch trả nợ", "DOCX - Báo cáo thẩm định", "PDF - Báo cáo thẩm định"])
+    if st.button("Tạo & Tải"):
+        inputs_copy = st.session_state["inputs"].copy()
+        metrics_copy = compute_indicators_from_inputs({
+            "loan_amount": inputs_copy.get("loan_amount", 0.0),
+            "interest_rate": inputs_copy.get("interest_rate", 0.0),
+            "term_months": inputs_copy.get("term_months", 60),
+            "total_income_month": inputs_copy.get("total_income_month", 0.0),
+            "monthly_expense": inputs_copy.get("monthly_expense", 0.0),
+            "collateral_value": inputs_copy.get("collateral_value", 0.0),
+            "own_capital": inputs_copy.get("own_capital", 0.0),
+            "total_need": inputs_copy.get("total_need", 0.0),
+            "tong_no_hien_tai": inputs_copy.get("tong_no_hien_tai", 0.0)
+        })
+        if exp_choice.startswith("Excel"):
+            excel_bytes = df_to_excel_bytes(schedule, info=inputs_copy, metrics=metrics_copy)
+            st.download_button("Tải Excel lịch trả nợ", data=excel_bytes, file_name="ke_hoach_tra_no.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        elif exp_choice.startswith("DOCX"):
+            if DocxWriter is None:
+                st.error("python-docx chưa cài, không thể xuất DOCX.")
+            else:
+                docx_bytes = export_docx_bytes(inputs_copy, metrics_copy, schedule, analysis_text=st.session_state.get("analysis_inputs",""))
+                st.download_button("Tải DOCX báo cáo", data=docx_bytes, file_name="bao_cao_tham_dinh.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        elif exp_choice.startswith("PDF"):
+            if SimpleDocTemplate is None:
+                st.error("reportlab chưa cài, không thể xuất PDF.")
+            else:
+                # build chart image
+                chart_png_bytes = None
+                if plt is not None:
+                    fig, ax = plt.subplots(figsize=(8,3))
+                    ax.plot(schedule["Month"], schedule["Payment"])
+                    ax.set_title("Payment over time")
+                    buf = io.BytesIO()
+                    fig.savefig(buf, format="png", bbox_inches="tight")
+                    chart_png_bytes = buf.getvalue()
+                pdf_bytes = create_pdf_report_bytes(inputs_copy, metrics_copy, schedule, chart_png_bytes, analysis_text=st.session_state.get("analysis_inputs",""))
+                st.download_button("Tải PDF báo cáo", data=pdf_bytes, file_name="bao_cao_tham_dinh.pdf", mime="application/pdf")
 
-        df_am = st.session_state.get("amortization")
-
-        if df_am is None:
-            df_am = generate_amortization_schedule(
-                state.get("loan_amount", 0),
-                state.get("interest_rate", 0),
-                state.get("term_months", 0),
-            )
-
-        col1, col2 = st.columns(2)
-
-        # Xuất Excel
-        with col1:
-            st.markdown("#### 📗 Xuất Excel")
-            st.info("Tải về lịch trả nợ chi tiết dạng Excel")
-            
-            if st.button("⬇️ Tải Excel", use_container_width=True):
-                xls_bytes = df_to_excel_bytes(df_am)
-                st.download_button(
-                    "💾 Lưu file Excel",
-                    data=xls_bytes,
-                    file_name=f"lich_tra_no_{datetime.date.today()}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
-
-        # Xuất PDF
-        with col2:
-            st.markdown("#### 📕 Xuất PDF")
-            st.info("Tải về báo cáo thẩm định đầy đủ")
-            
-            if st.button("⬇️ Tải PDF", use_container_width=True):
-                indicators = compute_indicators(state)
-
-                # Tạo biểu đồ cho PDF
-                fig2, ax2 = plt.subplots(figsize=(8, 3))
-                ax2.plot(df_am["Month"], df_am["Payment"])
-                ax2.set_title("Biểu đồ nghĩa vụ trả nợ")
-                buf2 = io.BytesIO()
-                fig2.savefig(buf2, format="png", bbox_inches="tight")
-                pdf_chart_bytes = buf2.getvalue()
-
-                pdf_data = create_pdf_report(state, indicators, chart_image_bytes=pdf_chart_bytes)
-
-                st.download_button(
-                    "💾 Lưu file PDF",
-                    data=pdf_data,
-                    file_name=f"bao_cao_tham_dinh_{datetime.date.today()}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-        
-        st.markdown("---")
-        
-        # Preview table
-        if not df_am.empty:
-            st.markdown("#### 📊 Xem trước lịch trả nợ")
-            st.dataframe(
-                df_am.head(12),
-                use_container_width=True,
-                hide_index=True
-            )
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# Footer
 st.markdown("---")
-st.markdown("""
-<div style='text-align: center; padding: 20px; color: white;'>
-    <p>Made with ❤️ for Agribank | © 2024 PASDV Analyzer</p>
-</div>
-""", unsafe_allow_html=True)
+st.caption("Ứng dụng PASDV — Muội viết lại bản full code. Muội có thể tách thành modules, push lên GitHub và thêm CI/CD nếu Huynh muốn.")
