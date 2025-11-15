@@ -1,19 +1,226 @@
-####################### main.py — PHẦN 1/5 ############################
+####################### main.py — PHIÊN BẢN UI HIỆN ĐẠI ############################
 # PASDV – PHÂN TÍCH PHƯƠNG ÁN SỬ DỤNG VỐN
-# Full Streamlit App – Version chuẩn deploy Streamlit Cloud
+# Modern UI Version with Enhanced Design
 # Muội viết theo yêu cầu của Huynh ❤️
 
 import streamlit as st
 import pandas as pd
 import io, re, requests, datetime, base64, tempfile
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import plotly.express as px
 
-# ---- Import DOCX an toàn (python-docx hoặc docx) ----
+# ---- Import DOCX an toàn ----
 try:
     from docx import Document
 except ImportError:
     import docx
     Document = docx.Document
+
+# ==========================
+# CUSTOM CSS - UI HIỆN ĐẠI
+# ==========================
+def load_custom_css():
+    st.markdown("""
+    <style>
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    /* Global Styles */
+    * {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Main Container */
+    .main {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 0;
+    }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1e3c72 0%, #2a5298 100%);
+        color: white;
+    }
+    
+    [data-testid="stSidebar"] .stTextInput input,
+    [data-testid="stSidebar"] .stSelectbox select {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        border-radius: 10px;
+        padding: 10px;
+    }
+    
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] label {
+        color: white !important;
+    }
+    
+    /* Card Style */
+    .card {
+        background: white;
+        border-radius: 20px;
+        padding: 30px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+    }
+    
+    /* Metric Cards */
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 15px;
+        padding: 20px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        margin: 10px 0;
+    }
+    
+    .metric-value {
+        font-size: 2.5em;
+        font-weight: 700;
+        margin: 10px 0;
+    }
+    
+    .metric-label {
+        font-size: 0.9em;
+        opacity: 0.9;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Buttons */
+    .stButton>button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 30px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+    }
+    
+    /* Input Fields */
+    .stTextInput>div>div>input,
+    .stNumberInput>div>div>input,
+    .stSelectbox>div>div>select {
+        border: 2px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 12px;
+        transition: border-color 0.3s ease;
+    }
+    
+    .stTextInput>div>div>input:focus,
+    .stNumberInput>div>div>input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+        background: white;
+        border-radius: 15px;
+        padding: 10px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 10px;
+        padding: 12px 24px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    /* File Uploader */
+    [data-testid="stFileUploader"] {
+        background: white;
+        border: 2px dashed #667eea;
+        border-radius: 15px;
+        padding: 30px;
+        text-align: center;
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #2d3748;
+        font-weight: 700;
+    }
+    
+    /* Success/Warning/Error Messages */
+    .stSuccess, .stWarning, .stError, .stInfo {
+        border-radius: 10px;
+        padding: 15px;
+    }
+    
+    /* DataFrame Styling */
+    .dataframe {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    /* Title Animation */
+    @keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .main-title {
+        animation: fadeInDown 0.8s ease;
+    }
+    
+    /* Progress Bar */
+    .stProgress > div > div > div > div {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #5568d3;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 # ---------------------------
 # Format số đẹp (1.000.000)
@@ -170,8 +377,6 @@ def compute_indicators(state):
         "net_cashflow": net_cf
     }
 
-######################## main.py — PHẦN 2 / 5 ###########################
-
 # ==========================
 # Lịch trả nợ (Amortization)
 # ==========================
@@ -207,7 +412,7 @@ def generate_amortization_schedule(loan_amount, annual_rate_percent, term_months
 # ==========================
 # Gemini API wrapper
 # ==========================
-GEMINI_API_URL = "https://api.example.com/gemini"   # Huynh sẽ thay bằng URL thật
+GEMINI_API_URL = "https://api.example.com/gemini"
 
 def call_gemini(prompt, api_key, max_tokens=512):
     if not api_key:
@@ -226,8 +431,6 @@ def call_gemini(prompt, api_key, max_tokens=512):
         r = requests.post(GEMINI_API_URL, json=payload, headers=headers, timeout=30)
         if r.status_code == 200:
             j = r.json()
-
-            # Phân loại các dạng response (tuỳ backend)
             if isinstance(j, dict):
                 for k in ["text", "output", "content", "response"]:
                     if k in j:
@@ -236,7 +439,6 @@ def call_gemini(prompt, api_key, max_tokens=512):
                     return j["choices"][0].get("text", "")
             return str(j)
         return f"Lỗi Gemini API: {r.status_code} - {r.text}"
-
     except Exception as e:
         return f"Lỗi gọi Gemini: {e}"
 
@@ -265,13 +467,11 @@ def create_pdf_report(state, indicators, chart_image_bytes=None):
     elems.append(Paragraph("BÁO CÁO THẨM ĐỊNH PHƯƠNG ÁN SỬ DỤNG VỐN", styles["Title"]))
     elems.append(Spacer(1, 12))
 
-    # ---- Thông tin khách hàng ----
     elems.append(Paragraph(f"Khách hàng: {state.get('name1','')}", styles["Normal"]))
     elems.append(Paragraph(f"Địa chỉ: {state.get('address','')}", styles["Normal"]))
     elems.append(Paragraph(f"Số điện thoại: {state.get('phone','')}", styles["Normal"]))
     elems.append(Spacer(1, 12))
 
-    # ---- Chỉ tiêu ----
     elems.append(Paragraph("CÁC CHỈ TIÊU TÀI CHÍNH", styles["Heading2"]))
     for k, v in indicators.items():
         if v is None:
@@ -286,7 +486,6 @@ def create_pdf_report(state, indicators, chart_image_bytes=None):
 
     elems.append(Spacer(1, 12))
 
-    # ---- Biểu đồ ----
     if chart_image_bytes:
         f = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
         f.write(chart_image_bytes)
@@ -298,23 +497,67 @@ def create_pdf_report(state, indicators, chart_image_bytes=None):
     with open(tmp.name, "rb") as f:
         return f.read()
 
+# ==========================
+# METRIC CARD COMPONENT
+# ==========================
+def metric_card(label, value, icon="💰"):
+    st.markdown(f"""
+    <div class="metric-card">
+        <div style="font-size: 2em;">{icon}</div>
+        <div class="metric-label">{label}</div>
+        <div class="metric-value">{value}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
 # =============================================================
 # BẮT ĐẦU ỨNG DỤNG STREAMLIT
 # =============================================================
-st.set_page_config(page_title="PASDV Analyzer", layout="wide")
-st.title("💼 PHÂN TÍCH PHƯƠNG ÁN SỬ DỤNG VỐN (PASDV)")
-st.caption("Ứng dụng hỗ trợ cán bộ tín dụng – phiên bản của Huynh ❤️")
+st.set_page_config(
+    page_title="PASDV Analyzer", 
+    layout="wide",
+    page_icon="💼",
+    initial_sidebar_state="expanded"
+)
+
+# Load Custom CSS
+load_custom_css()
+
+# Header với animation
+st.markdown("""
+<div class="main-title">
+    <h1 style='text-align: center; color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);'>
+        💼 PHÂN TÍCH PHƯƠNG ÁN SỬ DỤNG VỐN
+    </h1>
+    <p style='text-align: center; color: rgba(255,255,255,0.9); font-size: 1.2em;'>
+        Ứng dụng hỗ trợ cán bộ tín dụng – Phiên bản hiện đại ❤️
+    </p>
+</div>
+""", unsafe_allow_html=True)
 
 # --------------------------
 # Sidebar: API key Gemini
 # --------------------------
-st.sidebar.header("Cấu hình hệ thống")
-api_key = st.sidebar.text_input("🔑 API Key Gemini", type="password")
-
-export_choice = st.sidebar.selectbox(
-    "📤 Xuất dữ liệu",
-    ["Không xuất", "Xuất Excel lịch trả nợ", "Xuất PDF thẩm định"]
-)
+with st.sidebar:
+    st.markdown("### ⚙️ Cấu hình hệ thống")
+    api_key = st.text_input("🔑 API Key Gemini", type="password")
+    
+    st.markdown("---")
+    st.markdown("### 📤 Tùy chọn xuất dữ liệu")
+    export_choice = st.selectbox(
+        "Chọn định dạng",
+        ["Không xuất", "Xuất Excel lịch trả nợ", "Xuất PDF thẩm định"]
+    )
+    
+    st.markdown("---")
+    st.markdown("""
+    <div style='text-align: center; padding: 20px;'>
+        <p style='color: rgba(255,255,255,0.8);'>🧡 Ứng dụng PASDV</p>
+        <p style='color: rgba(255,255,255,0.6); font-size: 0.9em;'>
+            Phiên bản hiện đại<br>
+            Designed with ❤️
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --------------------------
 # State khởi tạo
@@ -339,8 +582,6 @@ if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
 state = st.session_state["state"]
-############################------------------ PHẦN 3
-######################## main.py — PHẦN 3 / 5 ###########################
 
 # =============================================================
 # Giao diện chính — chia 2 cột
@@ -351,25 +592,31 @@ left_col, right_col = st.columns([1, 3])
 # LEFT: Upload & Reset
 # ===========================
 with left_col:
-    st.header("📂 Upload hồ sơ")
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    st.markdown("### 📂 Upload hồ sơ")
 
-    uploaded_file = st.file_uploader("Tải file .docx phương án vay vốn", type=["docx"])
+    uploaded_file = st.file_uploader(
+        "Kéo thả hoặc chọn file .docx", 
+        type=["docx"],
+        help="Tải lên file phương án vay vốn"
+    )
 
     if uploaded_file:
-        text = extract_text_from_docx(uploaded_file)
-        parsed = extract_data_from_docx_text(text)
+        with st.spinner("🔄 Đang xử lý file..."):
+            text = extract_text_from_docx(uploaded_file)
+            parsed = extract_data_from_docx_text(text)
 
-        # nạp lên state
-        for k, v in parsed.items():
-            if v is not None:
-                state[k] = v
+            for k, v in parsed.items():
+                if v is not None:
+                    state[k] = v
 
-        st.success("Đã trích xuất dữ liệu từ file. Huynh kiểm tra bên phải nhé.")
-        st.text_area("📄 Nội dung file (rút gọn):", text[:5000], height=200)
+            st.success("✅ Trích xuất dữ liệu thành công!")
+            with st.expander("📄 Xem nội dung file"):
+                st.text_area("", text[:5000], height=200)
 
     st.markdown("---")
 
-    if st.button("🔄 Reset dữ liệu"):
+    if st.button("🔄 Reset dữ liệu", use_container_width=True):
         st.session_state["state"] = {
             "name1": "",
             "phone": "",
@@ -384,21 +631,25 @@ with left_col:
             "monthly_income": 0,
             "monthly_expense": 0
         }
-        st.experimental_rerun()
+        st.rerun()
+    
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # =============================================================
 # RIGHT: Tabs
 # =============================================================
 with right_col:
+    st.markdown("<div class='card'>", unsafe_allow_html=True)
+    
     tabs = st.tabs([
-        "1. Định danh",
-        "2. Tài chính",
-        "3. Tài sản bảo đảm",
-        "4. Tính toán",
-        "5. Biểu đồ",
-        "6. Phân tích AI",
-        "7. Chat Gemini",
-        "8. Xuất file"
+        "👤 Định danh",
+        "💰 Tài chính",
+        "🏠 Tài sản",
+        "📊 Tính toán",
+        "📈 Biểu đồ",
+        "🤖 AI",
+        "💬 Chat",
+        "📤 Xuất file"
     ])
 
     # ----------------------------------------------------------
@@ -414,94 +665,166 @@ with right_col:
             except:
                 pass
         with c2:
-            if st.button("+", key=f"plus_{key}"):
+            if st.button("➕", key=f"plus_{key}", use_container_width=True):
                 state[key] = state.get(key, 0) + step
+                st.rerun()
         with c3:
-            if st.button("-", key=f"minus_{key}"):
+            if st.button("➖", key=f"minus_{key}", use_container_width=True):
                 state[key] = max(0, state.get(key, 0) - step)
+                st.rerun()
 
     # =========================================================
     # TAB 1 – ĐỊNH DANH
     # =========================================================
     with tabs[0]:
-        st.subheader("📌 Thông tin định danh khách hàng")
+        st.markdown("### 👤 Thông tin định danh khách hàng")
+        st.markdown("---")
 
         col1, col2 = st.columns(2)
         with col1:
-            state["name1"] = st.text_input("Họ và tên", value=state.get("name1", ""))
-            state["address"] = st.text_input("Địa chỉ", value=state.get("address", ""))
+            state["name1"] = st.text_input("👨‍💼 Họ và tên", value=state.get("name1", ""))
+            state["address"] = st.text_input("🏡 Địa chỉ", value=state.get("address", ""))
         with col2:
-            state["phone"] = st.text_input("Số điện thoại", value=state.get("phone", ""))
-            state["email"] = st.text_input("Email", value=state.get("email", ""))
+            state["phone"] = st.text_input("📱 Số điện thoại", value=state.get("phone", ""))
+            state["email"] = st.text_input("📧 Email", value=state.get("email", ""))
 
     # =========================================================
     # TAB 2 – TÀI CHÍNH
     # =========================================================
     with tabs[1]:
-        st.subheader("💰 Thông tin tài chính & phương án vay")
+        st.markdown("### 💰 Thông tin tài chính & phương án vay")
+        st.markdown("---")
 
-        state["purpose"] = st.text_input("Mục đích vay", value=state.get("purpose", "Mua nhà"))
+        state["purpose"] = st.text_input("🎯 Mục đích vay", value=state.get("purpose", "Mua nhà"))
 
-        numeric_editor("Tổng nhu cầu vốn (VND)", "total_need", step=100000000)
-        numeric_editor("Vốn đối ứng (VND)", "own_capital", step=100000000)
-        numeric_editor("Số tiền vay (VND)", "loan_amount", step=100000000)
+        numeric_editor("💵 Tổng nhu cầu vốn (VND)", "total_need", step=100000000)
+        numeric_editor("💼 Vốn đối ứng (VND)", "own_capital", step=100000000)
+        numeric_editor("🏦 Số tiền vay (VND)", "loan_amount", step=100000000)
 
+        st.markdown("---")
+        
         cA, cB = st.columns(2)
         with cA:
             state["interest_rate"] = st.number_input(
-                "Lãi suất (%/năm)", value=float(state.get("interest_rate", 8.5)))
+                "📊 Lãi suất (%/năm)", 
+                value=float(state.get("interest_rate", 8.5)),
+                min_value=0.0,
+                max_value=100.0,
+                step=0.1
+            )
         with cB:
             state["term_months"] = st.number_input(
-                "Thời hạn vay (tháng)", value=int(state.get("term_months", 60)), min_value=1)
+                "📅 Thời hạn vay (tháng)", 
+                value=int(state.get("term_months", 60)), 
+                min_value=1,
+                max_value=360
+            )
+        
+        # Thêm thông tin thu nhập chi phí
+        st.markdown("---")
+        st.markdown("#### 💳 Thu nhập & Chi phí")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            numeric_editor("📈 Thu nhập hàng tháng (VND)", "monthly_income", step=10000000)
+        with col2:
+            numeric_editor("📉 Chi phí hàng tháng (VND)", "monthly_expense", step=5000000)
 
     # =========================================================
     # TAB 3 – TÀI SẢN BẢO ĐẢM
     # =========================================================
     with tabs[2]:
-        st.subheader("🏠 Tài sản bảo đảm")
+        st.markdown("### 🏠 Tài sản bảo đảm")
+        st.markdown("---")
 
-        state["asset_type"] = st.text_input("Loại tài sản", value=state.get("asset_type", "Nhà & đất"))
-        numeric_editor("Giá trị tài sản (VND)", "asset_value", step=100000000)
+        state["asset_type"] = st.text_input(
+            "🏘️ Loại tài sản", 
+            value=state.get("asset_type", "Nhà & đất")
+        )
+        
+        numeric_editor("💎 Giá trị tài sản (VND)", "asset_value", step=100000000)
 
-        state["asset_address"] = st.text_input("Địa chỉ tài sản", value=state.get("asset_address", ""))
-        state["asset_docs"] = st.text_input("Giấy tờ pháp lý", value=state.get("asset_docs", "GCN QSDĐ"))
+        st.markdown("---")
+        
+        state["asset_address"] = st.text_input(
+            "📍 Địa chỉ tài sản", 
+            value=state.get("asset_address", "")
+        )
+        state["asset_docs"] = st.text_input(
+            "📋 Giấy tờ pháp lý", 
+            value=state.get("asset_docs", "GCN QSDĐ")
+        )
 
     # =========================================================
     # TAB 4 – TÍNH TOÁN
     # =========================================================
     with tabs[3]:
-        st.subheader("📊 Kết quả tính toán")
+        st.markdown("### 📊 Kết quả tính toán chi tiết")
+        st.markdown("---")
 
         indicators = compute_indicators(state)
 
-        st.metric("💵 Thanh toán hàng tháng", format_thousands(indicators["monthly_payment"]))
-        st.metric("LTV (%)", f"{indicators['ltv']:.2f}%" if indicators["ltv"] else "N/A")
-        st.metric("DSR", f"{indicators['dsr']:.2%}" if indicators["dsr"] else "N/A")
-
-        st.write("### Chi tiết chỉ tiêu")
-        st.write({
-            "monthly_payment": format_thousands(indicators["monthly_payment"]),
-            "total_payment": format_thousands(indicators["total_payment"]),
-            "net_cashflow": format_thousands(indicators["net_cashflow"]),
-            "dsr": f"{indicators['dsr']:.2%}" if indicators["dsr"] else "N/A",
-            "ltv": f"{indicators['ltv']:.2f}%" if indicators["ltv"] else "N/A",
-        })
-
-        if st.button("📅 Tạo lịch trả nợ"):
-            df_am = generate_amortization_schedule(
-                state.get("loan_amount", 0),
-                state.get("interest_rate", 0),
-                state.get("term_months", 0),
+        # Display metrics in cards
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            metric_card(
+                "Thanh toán hàng tháng",
+                format_thousands(indicators["monthly_payment"]) + " VND",
+                "💵"
             )
-            st.session_state["amortization"] = df_am
-            st.success("Đã tạo lịch trả nợ! Xem tab ‘Xuất file’.")
-######################## main.py — PHẦN 4 / 5 ###########################
+        
+        with col2:
+            ltv_val = f"{indicators['ltv']:.2f}%" if indicators["ltv"] else "N/A"
+            metric_card("LTV Ratio", ltv_val, "📊")
+        
+        with col3:
+            dsr_val = f"{indicators['dsr']:.2%}" if indicators["dsr"] else "N/A"
+            metric_card("DSR Ratio", dsr_val, "📈")
+
+        st.markdown("---")
+        st.markdown("#### 📋 Chi tiết các chỉ tiêu")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.info(f"**💰 Tổng thanh toán:** {format_thousands(indicators['total_payment'])} VND")
+            st.info(f"**📊 DSR:** {f'{indicators["dsr"]:.2%}' if indicators['dsr'] else 'N/A'}")
+            st.info(f"**💎 LTV:** {f'{indicators["ltv"]:.2f}%' if indicators['ltv'] else 'N/A'}")
+        
+        with col2:
+            net_cf = indicators["net_cashflow"]
+            if net_cf >= 0:
+                st.success(f"**✅ Dòng tiền ròng:** +{format_thousands(net_cf)} VND")
+            else:
+                st.error(f"**❌ Dòng tiền ròng:** {format_thousands(net_cf)} VND")
+            
+            if indicators.get("dsr"):
+                if indicators["dsr"] <= 0.4:
+                    st.success("**✅ DSR:** Tốt (≤40%)")
+                elif indicators["dsr"] <= 0.5:
+                    st.warning("**⚠️ DSR:** Chấp nhận được (40-50%)")
+                else:
+                    st.error("**❌ DSR:** Rủi ro cao (>50%)")
+
+        st.markdown("---")
+        
+        if st.button("📅 Tạo lịch trả nợ chi tiết", use_container_width=True):
+            with st.spinner("Đang tạo lịch trả nợ..."):
+                df_am = generate_amortization_schedule(
+                    state.get("loan_amount", 0),
+                    state.get("interest_rate", 0),
+                    state.get("term_months", 0),
+                )
+                st.session_state["amortization"] = df_am
+                st.success("✅ Đã tạo lịch trả nợ thành công!")
 
     # =========================================================
     # TAB 5 – BIỂU ĐỒ
     # =========================================================
     with tabs[4]:
-        st.subheader("📈 Biểu đồ các chỉ tiêu")
+        st.markdown("### 📈 Biểu đồ phân tích trực quan")
+        st.markdown("---")
 
         df_am = st.session_state.get("amortization")
 
@@ -512,35 +835,76 @@ with right_col:
                 state.get("term_months", 0),
             )
 
-        fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(df_am["Month"], df_am["Payment"], label="Payment")
-        ax.plot(df_am["Month"], df_am["Principal"], label="Principal")
-        ax.plot(df_am["Month"], df_am["Interest"], label="Interest")
-        ax.legend()
-        ax.set_xlabel("Tháng")
-        ax.set_ylabel("VND")
-        ax.set_title("Biểu đồ dòng tiền trả nợ")
-        st.pyplot(fig)
-
-        # Lưu chart để nhúng PDF
-        buf = io.BytesIO()
-        fig.savefig(buf, format="png", bbox_inches="tight")
-        chart_bytes = buf.getvalue()
+        if not df_am.empty:
+            # Plotly interactive chart
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=df_am["Month"], 
+                y=df_am["Payment"],
+                name="Thanh toán",
+                line=dict(color='#667eea', width=3),
+                fill='tonexty'
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=df_am["Month"], 
+                y=df_am["Principal"],
+                name="Gốc",
+                line=dict(color='#764ba2', width=2)
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=df_am["Month"], 
+                y=df_am["Interest"],
+                name="Lãi",
+                line=dict(color='#f093fb', width=2)
+            ))
+            
+            fig.update_layout(
+                title="Biểu đồ dòng tiền trả nợ theo tháng",
+                xaxis_title="Tháng",
+                yaxis_title="Số tiền (VND)",
+                hovermode='x unified',
+                template='plotly_white',
+                height=500
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Pie chart for total payment breakdown
+            total_principal = df_am["Principal"].sum()
+            total_interest = df_am["Interest"].sum()
+            
+            fig2 = go.Figure(data=[go.Pie(
+                labels=['Gốc', 'Lãi'],
+                values=[total_principal, total_interest],
+                hole=.4,
+                marker_colors=['#667eea', '#f093fb']
+            )])
+            
+            fig2.update_layout(
+                title="Tỷ lệ Gốc/Lãi trong tổng thanh toán",
+                height=400
+            )
+            
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("📊 Chưa có dữ liệu để hiển thị biểu đồ. Vui lòng nhập thông tin vay vốn.")
 
     # =========================================================
     # TAB 6 – PHÂN TÍCH AI
     # =========================================================
     with tabs[5]:
-        st.subheader("🤖 Phân tích bằng Gemini AI")
+        st.markdown("### 🤖 Phân tích thông minh với Gemini AI")
+        st.markdown("---")
 
-        # -----------------------------
-        # 1) Phân tích dựa vào FILE UPLOAD
-        # -----------------------------
-        st.markdown("### 📝 Phần 1 – Phân tích dựa vào file upload")
-
-        if st.button("Phân tích File Upload"):
+        # Phân tích File Upload
+        st.markdown("#### 📝 Phân tích dựa vào file upload")
+        
+        if st.button("🔍 Phân tích File", use_container_width=True):
             if not uploaded_file:
-                st.warning("Chưa có file upload!")
+                st.warning("⚠️ Chưa có file upload!")
             else:
                 uploaded_file.seek(0)
                 raw_text = extract_text_from_docx(uploaded_file)
@@ -551,64 +915,83 @@ with right_col:
                     f"--- DỮ LIỆU TỪ FILE UPLOAD ---\n{raw_text[:5000]}"
                 )
 
-                with st.spinner("Gemini đang phân tích…"):
+                with st.spinner("🤖 Gemini đang phân tích..."):
                     ai_result = call_gemini(prompt, api_key)
-                    st.text_area("Kết quả phân tích File Upload", ai_result, height=300)
+                    st.markdown("**📊 Kết quả phân tích:**")
+                    st.info(ai_result)
 
-        # -----------------------------
-        # 2) Phân tích dựa vào dữ liệu chỉnh sửa
-        # -----------------------------
-        st.markdown("### ✏️ Phần 2 – Phân tích dựa vào dữ liệu đã chỉnh sửa")
+        st.markdown("---")
 
-        if st.button("Phân tích dữ liệu đã nhập"):
+        # Phân tích dữ liệu đã nhập
+        st.markdown("#### ✏️ Phân tích dựa vào dữ liệu đã chỉnh sửa")
+
+        if st.button("🔍 Phân tích Dữ liệu", use_container_width=True):
             prompt2 = (
-                "Hãy phân tích hồ sơ vay vốn dựa trên dữ liệu nhập liệu phía người dùng.\n\n"
+                "Hãy phân tích hồ sơ vay vốn dựa trên dữ liệu nhập liệu.\n\n"
                 "--- DỮ LIỆU NHẬP LIỆU ---\n"
                 f"{state}\n\n"
                 "--- CÁC CHỈ TIÊU TÍNH TOÁN ---\n"
                 f"{compute_indicators(state)}"
             )
 
-            with st.spinner("Gemini đang phân tích…"):
+            with st.spinner("🤖 Gemini đang phân tích..."):
                 ai_result2 = call_gemini(prompt2, api_key)
-                st.text_area("Kết quả phân tích Dữ liệu nhập", ai_result2, height=300)
+                st.markdown("**📊 Kết quả phân tích:**")
+                st.success(ai_result2)
 
     # =========================================================
     # TAB 7 – CHAT GEMINI
     # =========================================================
     with tabs[6]:
-        st.subheader("💬 Chat với Gemini AI")
+        st.markdown("### 💬 Chat trực tiếp với Gemini AI")
+        st.markdown("---")
 
-        chat_input = st.text_input("Nhập câu hỏi:")
+        # Chat input
+        chat_input = st.text_input("💭 Nhập câu hỏi của bạn:", key="chat_input")
 
-        c_send, c_clear = st.columns([1, 1])
-        with c_send:
-            if st.button("Gửi"):
-                if not chat_input:
-                    st.warning("Nhập nội dung trước khi gửi!")
-                else:
-                    st.session_state["chat_history"].append(("User", chat_input))
-                    reply = call_gemini(chat_input, api_key)
-                    st.session_state["chat_history"].append(("Gemini", reply))
-                    st.experimental_rerun()
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            send_btn = st.button("📤 Gửi", use_container_width=True)
+        with col2:
+            clear_btn = st.button("🗑️ Xóa", use_container_width=True)
 
-        with c_clear:
-            if st.button("Xóa hội thoại"):
-                st.session_state["chat_history"] = []
-                st.experimental_rerun()
+        if send_btn and chat_input:
+            st.session_state["chat_history"].append(("User", chat_input))
+            with st.spinner("Đang xử lý..."):
+                reply = call_gemini(chat_input, api_key)
+                st.session_state["chat_history"].append(("Gemini", reply))
+            st.rerun()
 
-        # Hiển thị chat
-        for role, msg in st.session_state["chat_history"]:
+        if clear_btn:
+            st.session_state["chat_history"] = []
+            st.rerun()
+
+        # Display chat history
+        st.markdown("---")
+        st.markdown("#### 💬 Lịch sử hội thoại")
+        
+        for role, msg in reversed(st.session_state["chat_history"]):
             if role == "User":
-                st.markdown(f"**🧑 Khách hàng:** {msg}")
+                st.markdown(f"""
+                <div style='background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                            padding: 15px; border-radius: 15px; margin: 10px 0; color: white;'>
+                    <strong>🧑 Bạn:</strong> {msg}
+                </div>
+                """, unsafe_allow_html=True)
             else:
-                st.markdown(f"**🤖 Gemini:** {msg}")
+                st.markdown(f"""
+                <div style='background: #f7fafc; padding: 15px; border-radius: 15px; 
+                            margin: 10px 0; border-left: 4px solid #667eea;'>
+                    <strong>🤖 Gemini:</strong> {msg}
+                </div>
+                """, unsafe_allow_html=True)
 
     # =========================================================
     # TAB 8 – XUẤT FILE
     # =========================================================
     with tabs[7]:
-        st.subheader("📤 Xuất file")
+        st.markdown("### 📤 Xuất file báo cáo")
+        st.markdown("---")
 
         df_am = st.session_state.get("amortization")
 
@@ -619,50 +1002,66 @@ with right_col:
                 state.get("term_months", 0),
             )
 
-        # =====================================
+        col1, col2 = st.columns(2)
+
         # Xuất Excel
-        # =====================================
-        if st.button("⬇️ Xuất Excel – Lịch trả nợ"):
-            xls_bytes = df_to_excel_bytes(df_am)
-            st.download_button(
-                "Tải file Excel",
-                data=xls_bytes,
-                file_name="lich_tra_no.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        with col1:
+            st.markdown("#### 📗 Xuất Excel")
+            st.info("Tải về lịch trả nợ chi tiết dạng Excel")
+            
+            if st.button("⬇️ Tải Excel", use_container_width=True):
+                xls_bytes = df_to_excel_bytes(df_am)
+                st.download_button(
+                    "💾 Lưu file Excel",
+                    data=xls_bytes,
+                    file_name=f"lich_tra_no_{datetime.date.today()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
 
-        # =====================================
         # Xuất PDF
-        # =====================================
-        if st.button("⬇️ Xuất PDF – Báo cáo thẩm định"):
-            indicators = compute_indicators(state)
+        with col2:
+            st.markdown("#### 📕 Xuất PDF")
+            st.info("Tải về báo cáo thẩm định đầy đủ")
+            
+            if st.button("⬇️ Tải PDF", use_container_width=True):
+                indicators = compute_indicators(state)
 
-            # tạo biểu đồ mới để nhúng
-            fig2, ax2 = plt.subplots(figsize=(8,3))
-            ax2.plot(df_am["Month"], df_am["Payment"])
-            ax2.set_title("Biểu đồ nghĩa vụ trả nợ")
-            buf2 = io.BytesIO()
-            fig2.savefig(buf2, format="png", bbox_inches="tight")
-            pdf_chart_bytes = buf2.getvalue()
+                # Tạo biểu đồ cho PDF
+                fig2, ax2 = plt.subplots(figsize=(8, 3))
+                ax2.plot(df_am["Month"], df_am["Payment"])
+                ax2.set_title("Biểu đồ nghĩa vụ trả nợ")
+                buf2 = io.BytesIO()
+                fig2.savefig(buf2, format="png", bbox_inches="tight")
+                pdf_chart_bytes = buf2.getvalue()
 
-            pdf_data = create_pdf_report(state, indicators, chart_image_bytes=pdf_chart_bytes)
+                pdf_data = create_pdf_report(state, indicators, chart_image_bytes=pdf_chart_bytes)
 
-            st.download_button(
-                "Tải PDF",
-                data=pdf_data,
-                file_name="bao_cao_tham_dinh.pdf",
-                mime="application/pdf"
+                st.download_button(
+                    "💾 Lưu file PDF",
+                    data=pdf_data,
+                    file_name=f"bao_cao_tham_dinh_{datetime.date.today()}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+        
+        st.markdown("---")
+        
+        # Preview table
+        if not df_am.empty:
+            st.markdown("#### 📊 Xem trước lịch trả nợ")
+            st.dataframe(
+                df_am.head(12),
+                use_container_width=True,
+                hide_index=True
             )
 
-######################## main.py — PHẦN 5 / 5 ###########################
+    st.markdown("</div>", unsafe_allow_html=True)
 
-# ===========================
-# Sidebar thông tin
-# ===========================
-st.sidebar.markdown("---")
-st.sidebar.write("🧡 Ứng dụng PASDV – Hoàn chỉnh theo yêu cầu của Huynh.")
-st.sidebar.write("Nếu cần thêm tính năng: ký số PDF, API Agribank, lưu DB, multi-user… Muội làm tiếp cho Huynh.")
-
-# ===========================
-# KẾT THÚC ỨNG DỤNG
-# ===========================
+# Footer
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; padding: 20px; color: white;'>
+    <p>Made with ❤️ for Agribank | © 2024 PASDV Analyzer</p>
+</div>
+""", unsafe_allow_html=True)
