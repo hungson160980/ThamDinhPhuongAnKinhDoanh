@@ -14,3 +14,4 @@ matplotlib
 openpyxl
 reportlab
 requests
+pip install plotly
